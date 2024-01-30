@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/share"
@@ -33,7 +34,7 @@ func main() {
 	if err != nil {
 		fmt.Errorf("failed to create rpc client: %v", err)
 	}
-	fmt.Printf("client: %v\n", client)
+
 	// Use random hex for namespace
 	nsBytes := make([]byte, 10)
 	_, err = hex.Decode(nsBytes, []byte("9cb73e106b03d1050a13"))
@@ -42,6 +43,10 @@ func main() {
 	}
 	namespace, err := share.NewBlobNamespaceV0(nsBytes)
 	celestia := NewCelestiaDA(client, namespace, -1, ctx)
+
+	// Initalise EigenDA client
+	eigen := NewEigendaDAClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+	fmt.Println(eigen)
 	// sets up a GET API in route /hello that returns the text "World"
 	router.POST("/Avail", func(c *gin.Context) {
 		// Get the data in []byte from the request body
@@ -86,6 +91,29 @@ func main() {
 			"message": "Daaaash",
 			"ids":     ids,
 			"proofs":  proofs,
+		})
+	})
+
+	router.POST("/Eigen", func(c *gin.Context) {
+		// Get the data in []byte from the request body
+		data, err := c.GetRawData()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("get raw data: %v", err),
+			})
+			return
+		}
+		// Post the data to DA
+		blobInfo, err := eigen.disperseBlob(ctx, data)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("post to DA: %v", err),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "Daaaash",
+			"blobInfo": blobInfo,
 		})
 	})
 	// Run implements a http.ListenAndServe() and takes in an optional Port number

@@ -28,6 +28,7 @@ require (
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
 	github.com/Jorropo/jsync v1.0.1 // indirect
+	github.com/Layr-Labs/eigenda/api v0.1.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
@@ -342,7 +343,7 @@ require (
 )
 
 replace (
-	// Avail fork of go-substrate-rpc-client/v4 
+	// Avail fork of go-substrate-rpc-client/v4
 	github.com/centrifuge/go-substrate-rpc-client/v4 => github.com/availproject/go-substrate-rpc-client/v4 v4.1.0-avail-1.8
 	// Celestia forks
 	github.com/cosmos/cosmos-sdk => github.com/celestiaorg/cosmos-sdk v1.18.1-sdk-v0.46.14
