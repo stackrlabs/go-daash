@@ -213,6 +213,7 @@ out:
 			return nil, nil, fmt.Errorf("cannot close body", err)
 		}
 
+		fmt.Sprintln("data", data)
 		var dataProofResp DataProofRPCResponse
 		err = json.Unmarshal(data, &dataProofResp)
 		if err != nil {
