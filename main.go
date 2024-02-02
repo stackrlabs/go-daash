@@ -50,7 +50,10 @@ func main() {
 	celestia := NewCelestiaDA(client, namespace, -1, ctx)
 
 	// Initalise EigenDA client
-	eigen := NewEigendaDAClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+	eigen, err := NewEigendaDAClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+	if err != nil {
+		fmt.Printf("failed to create eigen client: %v", err)
+	}
 	router.POST("/Avail", func(c *gin.Context) {
 		// Get the data in []byte from the request body
 		data, err := c.GetRawData()
@@ -109,7 +112,7 @@ func main() {
 			return
 		}
 		// Post the data to DA
-		blobInfo, err := eigen.disperseBlob(ctx, data)
+		ids, proofs, err := postToDA(c, data, eigen)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("post to DA: %v", err),
@@ -117,8 +120,9 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message":  "Daaaash",
-			"blobInfo": blobInfo,
+			"message": "Daaaash",
+			"ids":     ids,
+			"proofs":  proofs,
 		})
 	})
 	// Run implements a http.ListenAndServe() and takes in an optional Port number
