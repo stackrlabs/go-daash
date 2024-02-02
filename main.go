@@ -11,6 +11,7 @@ import (
 
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/share"
+	"github.com/rollkit/go-da"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
@@ -21,7 +22,11 @@ func main() {
 	router := gin.Default()
 
 	// Initialise Avail DA client
-	daClient := NewAvailDA()
+	avail, err := NewAvailDA()
+	if err != nil {
+		fmt.Printf("failed to create avail client: %v", err)
+	}
+
 	ctx := context.Background()
 	// Initialise Celestia DA client
 	// Read auth token from env
@@ -32,7 +37,7 @@ func main() {
 	}
 	client, err := rpc.NewClient(ctx, "http://localhost:26658", authToken)
 	if err != nil {
-		fmt.Errorf("failed to create rpc client: %v", err)
+		fmt.Printf("failed to create rpc client: %v", err)
 	}
 
 	// Use random hex for namespace
@@ -46,8 +51,6 @@ func main() {
 
 	// Initalise EigenDA client
 	eigen := NewEigendaDAClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
-	fmt.Println(eigen)
-	// sets up a GET API in route /hello that returns the text "World"
 	router.POST("/Avail", func(c *gin.Context) {
 		// Get the data in []byte from the request body
 		data, err := c.GetRawData()
@@ -58,7 +61,7 @@ func main() {
 			return
 		}
 		// Post the data to DA
-		err = postToDA(data, daClient)
+		ids, proofs, err := postToDA(c, data, avail)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("post to DA: %v", err),
@@ -67,6 +70,8 @@ func main() {
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Daaaash",
+			"ids":     ids,
+			"proofs":  proofs,
 		})
 	})
 
@@ -80,7 +85,7 @@ func main() {
 			return
 		}
 		// Post the data to DA
-		ids, proofs, err := celestia.Submit(c, [][]byte{data}, -1)
+		ids, proofs, err := postToDA(c, data, celestia)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("post to DA: %v", err),
@@ -121,17 +126,21 @@ func main() {
 	router.Run()
 }
 
-func postToDA(data []byte, availDAClient DAClient) error {
+func postToDA(c *gin.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
+	daProofs := make([]da.Proof, 1)
+	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
-		resp, err := availDAClient.PostData(data)
+		proofs, ids, err := DAClient.Submit(c, [][]byte{data}, -1)
 		if err != nil {
+			fmt.Println("post data: ", err)
 			return fmt.Errorf("post data: %w", err)
 		}
-		fmt.Println(resp)
+		daProofs = proofs
+		daIDs = ids
 		return nil
 	}, backoff.NewExponentialBackOff())
 	if err != nil {
-		return fmt.Errorf("retry: %w", err)
+		return nil, nil, fmt.Errorf("retry: %w", err)
 	}
-	return nil
+	return daProofs, daIDs, nil
 }
