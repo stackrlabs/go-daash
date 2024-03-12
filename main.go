@@ -17,6 +17,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Constants
+const (
+	CelestiaClientUrl = "http://localhost:26658"
+	EigenDaRpcUrl     = "disperser-goerli.eigenda.xyz:443"
+)
+
 func main() {
 	// initiates a gin Engine with the default logger and recovery middleware
 	router := gin.Default()
@@ -37,7 +43,7 @@ func main() {
 		fmt.Println("AUTH_TOKEN is not set")
 		return
 	}
-	client, err := rpc.NewClient(ctx, "http://localhost:26658", authToken)
+	client, err := rpc.NewClient(ctx, CelestiaClientUrl, authToken)
 	if err != nil {
 		fmt.Printf("failed to create rpc client: %v", err)
 	}
@@ -52,11 +58,28 @@ func main() {
 	celestia := NewCelestiaDA(client, namespace, -1, ctx)
 
 	// Initalise EigenDA client
-	eigen, err := NewEigendaDAClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+	eigen, err := NewEigendaDAClient(EigenDaRpcUrl, time.Second*90, time.Second*5)
 	if err != nil {
 		fmt.Printf("failed to create eigen client: %v", err)
 	}
-	router.POST("/Avail", func(c *gin.Context) {
+
+	// Map of DA clients
+	daClients := map[string]da.DA{
+		"avail":    avail,
+		"celestia": celestia,
+		"eigen":    eigen,
+	}
+
+	router.POST("/:daName", func(c *gin.Context) {
+		daName := c.Param("daName")
+
+		if _, ok := daClients[daName]; !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("DA %s not found", daName),
+			})
+			return
+		}
+
 		// Get the data in []byte from the request body
 		data, err := c.GetRawData()
 		if err != nil {
@@ -65,8 +88,9 @@ func main() {
 			})
 			return
 		}
+
 		// Post the data to DA
-		ids, proofs, err := postToDA(c, data, avail)
+		ids, proofs, err := postToDA(c, data, daClients[daName])
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("post to DA: %v", err),
@@ -74,59 +98,12 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Daaaash",
+			"message": "DAaaaSh",
 			"ids":     ids,
 			"proofs":  proofs,
 		})
 	})
 
-	router.POST("/Celestia", func(c *gin.Context) {
-		// Get the data in []byte from the request body
-		data, err := c.GetRawData()
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": fmt.Sprintf("get raw data: %v", err),
-			})
-			return
-		}
-		// Post the data to DA
-		ids, proofs, err := postToDA(c, data, celestia)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("post to DA: %v", err),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Daaaash",
-			"ids":     ids,
-			"proofs":  proofs,
-		})
-	})
-
-	router.POST("/Eigen", func(c *gin.Context) {
-		// Get the data in []byte from the request body
-		data, err := c.GetRawData()
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": fmt.Sprintf("get raw data: %v", err),
-			})
-			return
-		}
-		// Post the data to DA
-		ids, proofs, err := postToDA(c, data, eigen)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("post to DA: %v", err),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Daaaash",
-			"ids":     ids,
-			"proofs":  proofs,
-		})
-	})
 	// Run implements a http.ListenAndServe() and takes in an optional Port number
 	// The default port is :8080
 	router.Run()
