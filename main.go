@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/share"
+	"github.com/joho/godotenv"
 	"github.com/rollkit/go-da"
 
 	"github.com/cenkalti/backoff/v4"
@@ -20,6 +20,9 @@ import (
 func main() {
 	// initiates a gin Engine with the default logger and recovery middleware
 	router := gin.Default()
+	ctx := context.Background()
+
+	envFile, _ := godotenv.Read(".env")
 
 	// Initialise Avail DA client
 	avail, err := NewAvailDA()
@@ -27,10 +30,9 @@ func main() {
 		fmt.Printf("failed to create avail client: %v", err)
 	}
 
-	ctx := context.Background()
 	// Initialise Celestia DA client
 	// Read auth token from env
-	authToken := os.Getenv("CELESTIA_AUTH_TOKEN")
+	authToken := envFile["CELESTIA_AUTH_TOKEN"]
 	if authToken == "" {
 		fmt.Println("AUTH_TOKEN is not set")
 		return

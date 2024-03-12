@@ -118,10 +118,11 @@ func (c *AvailDA) MaxBlobSize(ctx context.Context) (uint64, error) {
 // Currently, we submit to a trusted RPC Avail node. In the future, we will submit via an Avail light client.
 func (a *AvailDA) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	// TODO: Add support for multiple blobs
-	log.Println("data", zap.Any("data", daBlobs[0]))
-	log.Println("⚡️ Preparing to post data to Avail:%d bytes", zap.Int("data_size", len(daBlobs[0])))
+	daBlob := daBlobs[0]
+	log.Println("data", zap.Any("data", daBlob))
+	log.Println("⚡️ Preparing to post data to Avail:%d bytes", zap.Int("data_size", len(daBlob)))
 	fmt.Println(*a)
-	newCall, err := types.NewCall(a.Meta, "DataAvailability.submit_data", types.NewBytes(daBlobs[0]))
+	newCall, err := types.NewCall(a.Meta, "DataAvailability.submit_data", types.NewBytes(daBlob))
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot create new call", err)
 	}
