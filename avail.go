@@ -30,12 +30,25 @@ type DAClient interface {
 type AccountNextIndexRPCResponse struct {
 	Result uint `json:"result"`
 }
-
 type DataProofRPCResponse struct {
-	Result DataProof `json:"result"`
+	Jsonrpc string `json:"jsonrpc"`
+	Result  struct {
+		DataProof struct {
+			DataRoot       string   `json:"dataRoot"`
+			BlobRoot       string   `json:"blobRoot"`
+			BridgeRoot     string   `json:"bridgeRoot"`
+			Proof          []string `json:"proof"`
+			NumberOfLeaves int      `json:"numberOfLeaves"`
+			LeafIndex      int      `json:"leafIndex"`
+			Leaf           string   `json:"leaf"`
+		} `json:"dataProof"`
+	} `json:"result"`
+	ID int `json:"id"`
 }
 type DataProof struct {
-	Root           string   `json:"root"`
+	Root           string   `json:"dataRoot"`
+	BlobRoot       string   `json:"blobRoot"`
+	BridgeRoot     string   `json:"bridgeRoot"`
 	Proof          []string `json:"proof"`
 	NumberOfLeaves uint32   `json:"numberOfLeaves"`
 	LeafIndex      uint32   `json:"leafIndex"`
@@ -185,7 +198,6 @@ out:
 
 	log.Println("✅ Data submitted by sequencer bytes against AppID sent with hash", zap.String("block hash", blockHash.Hex()))
 
-	var dataProof DataProof
 	var batchHash [32]byte
 
 	h := sha3.NewLegacyKeccak256()
@@ -197,36 +209,38 @@ out:
 		return nil, nil, fmt.Errorf("cannot get block", err)
 	}
 
-	// TODO: We go through all extrinsics to get the data proof. We should be able to get the data proof from the extrinsic that we submitted.
-	for i := 1; i <= len(block.Block.Extrinsics); i++ {
-		resp, err := http.Post("https://goldberg.avail.tools/api", "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", i, blockHash))) //nolint: noctx
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot post query request", err)
-		}
+	var dataProofResp DataProofRPCResponse
+	for idx, e := range block.Block.Extrinsics {
+		// Look for our submitted extrinsic in the block
+		if ext.Signature.Signature.AsEcdsa.Hex() == e.Signature.Signature.AsEcdsa.Hex() {
+			resp, err := http.Post("https://goldberg.avail.tools/api", "application/json",
+				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot post query request", err)
+			}
+			data, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot read body", err)
+			}
+			err = resp.Body.Close()
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot close body", err)
+			}
+			err = json.Unmarshal(data, &dataProofResp)
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot unmarshal data proof: %w", err)
+			}
 
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot read body", err)
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot close body", err)
-		}
-
-		fmt.Sprintln("data", data)
-		var dataProofResp DataProofRPCResponse
-		err = json.Unmarshal(data, &dataProofResp)
-		if err != nil {
-			return nil, nil, fmt.Errorf("cannot unmarshal data proof", err)
-		}
-
-		if dataProofResp.Result.Leaf == fmt.Sprintf("%#x", batchHash) {
-			dataProof = dataProofResp.Result
+			if dataProofResp.Result.DataProof.Leaf == fmt.Sprintf("%#x", batchHash) {
+				log.Println("data proof validated", dataProofResp.Result)
+			}
 			break
 		}
 	}
+	dataProof := dataProofResp.Result.DataProof
+
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := a.makeID(uint32(block.Block.Header.Number), dataProof.LeafIndex)
+	blobID := a.makeID(uint32(block.Block.Header.Number), uint32(dataProof.LeafIndex))
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -235,7 +249,7 @@ out:
 		serialisedProofs[0] = append(serialisedProofs[0], word...)
 	}
 
-	log.Println("💿 received data proof:%+v", zap.Any("dataproof", dataProof))
+	log.Printf("💿 received data proof:%+v\n", zap.Any("dataproof", dataProof))
 	return blobIDs, serialisedProofs, nil
 }
 
@@ -267,135 +281,6 @@ func (a *AvailDA) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitmen
 func (c *AvailDA) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
 	// TODO: Need to implement this
 	return nil, nil
-}
-
-func (a AvailDA) PostData(txData []byte) (*BatchDAData, error) {
-	log.Println("⚡️ Prepared data for Avail:%d bytes", zap.Int("data_size", len(txData)))
-
-	newCall, err := types.NewCall(a.Meta, "DataAvailability.submit_data", types.NewBytes(txData))
-	if err != nil {
-		return nil, fmt.Errorf("cannot create new call", err)
-	}
-
-	// Create the extrinsic
-	ext := types.NewExtrinsic(newCall)
-
-	nonce, err := a.GetAccountNextIndex()
-	if err != nil {
-		return nil, fmt.Errorf("cannot get account next index", err)
-	}
-
-	options := types.SignatureOptions{
-		BlockHash:          a.GenesisHash,
-		Era:                types.ExtrinsicEra{IsMortalEra: false},
-		GenesisHash:        a.GenesisHash,
-		Nonce:              nonce,
-		SpecVersion:        a.Rv.SpecVersion,
-		Tip:                types.NewUCompactFromUInt(1000),
-		AppID:              types.NewUCompactFromUInt(uint64(a.AppID)),
-		TransactionVersion: a.Rv.TransactionVersion,
-	}
-
-	err = ext.Sign(a.KeyringPair, options)
-	if err != nil {
-		return nil, fmt.Errorf("cannot sign extrinsic", err)
-	}
-
-	// Send the extrinsic
-	sub, err := a.API.RPC.Author.SubmitAndWatchExtrinsic(ext)
-	if err != nil {
-		return nil, fmt.Errorf("cannot submit extrinsic", err)
-	}
-
-	defer sub.Unsubscribe()
-	timeout := time.After(time.Duration(a.config.Timeout) * time.Second)
-	var blockHash types.Hash
-out:
-	for {
-		select {
-		case status := <-sub.Chan():
-			if status.IsInBlock {
-				log.Println("📥 Submit data extrinsic included in block %v", zap.String("status in block", status.AsInBlock.Hex()))
-			}
-			if status.IsFinalized {
-				blockHash = status.AsFinalized
-				break out
-			} else if status.IsDropped {
-				return nil, fmt.Errorf("extrinsic dropped")
-			} else if status.IsUsurped {
-				return nil, fmt.Errorf("extrinsic usurped")
-			} else if status.IsRetracted {
-				return nil, fmt.Errorf("extrinsic retracted")
-			} else if status.IsInvalid {
-				return nil, fmt.Errorf("extrinsic invalid")
-			}
-		case <-timeout:
-			return nil, fmt.Errorf("timeout")
-		}
-	}
-
-	log.Println("✅ Data submitted by sequencer bytes against AppID sent with hash", zap.String("block hash", blockHash.Hex()))
-
-	var dataProof DataProof
-	var batchHash [32]byte
-
-	h := sha3.NewLegacyKeccak256()
-	h.Write(txData)
-	h.Sum(batchHash[:0])
-
-	block, err := a.API.RPC.Chain.GetBlock(blockHash)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get block", err)
-	}
-
-	for i := 1; i <= len(block.Block.Extrinsics); i++ {
-		resp, err := http.Post("https://goldberg.avail.tools/api", "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", i, blockHash))) //nolint: noctx
-		if err != nil {
-			return nil, fmt.Errorf("cannot post query request", err)
-		}
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("cannot read body", err)
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("cannot close body", err)
-		}
-
-		fmt.Println("data", data)
-		var dataProofResp DataProofRPCResponse
-		err = json.Unmarshal(data, &dataProofResp)
-		if err != nil {
-			return nil, fmt.Errorf("cannot unmarshal data proof", err)
-		}
-
-		if dataProofResp.Result.Leaf == fmt.Sprintf("%#x", batchHash) {
-			dataProof = dataProofResp.Result
-			break
-		}
-	}
-
-	log.Println("💿 received data proof:%+v", zap.Any("dataproof", dataProof))
-	var batchDAData BatchDAData
-	batchDAData.Proof = dataProof.Proof
-	batchDAData.Width = uint(dataProof.NumberOfLeaves)
-	batchDAData.LeafIndex = uint(dataProof.LeafIndex)
-
-	header, err := a.API.RPC.Chain.GetHeader(blockHash)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get header", err)
-	}
-
-	batchDAData.BlockNumber = uint(header.Number)
-	data, err := a.GetData(uint64(header.Number), uint(dataProof.LeafIndex))
-	if err != nil {
-		return nil, fmt.Errorf("cannot get data", err)
-	}
-	log.Println("📥 received data:%+v", zap.Any("data", data))
-	log.Println("🟢 prepared DA data:%+v", zap.Any("batchdata", batchDAData))
-
-	return &batchDAData, nil
 }
 
 type BatchDAData struct {
