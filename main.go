@@ -20,7 +20,6 @@ import (
 func main() {
 	// initiates a gin Engine with the default logger and recovery middleware
 	router := gin.Default()
-
 	// Initialise Avail DA client
 	avail, err := NewAvailDA()
 	if err != nil {
