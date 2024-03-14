@@ -1,4 +1,4 @@
-package main
+package celestiada
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type CelestiaDA struct {
 }
 
 // NewCelestiaDA returns an instance of CelestiaDA
-func NewCelestiaDA(client *rpc.Client, namespace share.Namespace, gasPrice float64, ctx context.Context) *CelestiaDA {
+func NewClient(client *rpc.Client, namespace share.Namespace, gasPrice float64, ctx context.Context) *CelestiaDA {
 	return &CelestiaDA{
 		client:    client,
 		namespace: namespace,

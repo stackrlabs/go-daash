@@ -15,6 +15,10 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
+	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/availda"
+	"github.com/stackrlabs/go-daash/celestiada"
+	"github.com/stackrlabs/go-daash/eigenda"
 )
 
 // Constants
@@ -36,7 +40,7 @@ func main() {
 	}
 
 	// Initialise Avail DA client
-	avail, err := NewAvailDA()
+	avail, err := availda.New()
 	if err != nil {
 		fmt.Printf("failed to create avail client: %v", err)
 	}
@@ -60,10 +64,10 @@ func main() {
 		log.Fatalln("invalid hex value of a namespace:", err)
 	}
 	namespace, err := share.NewBlobNamespaceV0(nsBytes)
-	celestia := NewCelestiaDA(client, namespace, -1, ctx)
+	celestia := celestiada.NewClient(client, namespace, -1, ctx)
 
 	// Initalise EigenDA client
-	eigen, err := NewEigendaDAClient(EigenDaRpcUrl, time.Second*90, time.Second*5)
+	eigen, err := eigenda.New(EigenDaRpcUrl, time.Second*90, time.Second*5)
 	if err != nil {
 		fmt.Printf("failed to create eigen client: %v", err)
 	}

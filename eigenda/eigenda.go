@@ -1,4 +1,4 @@
-package main
+package eigenda
 
 import (
 	"context"
@@ -30,7 +30,8 @@ type EigendaDAClient struct {
 	DAStatusQueryRetryInterval time.Duration
 }
 
-func NewEigendaDAClient(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInterval time.Duration) (*EigendaDAClient, error) {
+// New returns a new instance of the EigenDA client.
+func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInterval time.Duration) (*EigendaDAClient, error) {
 	conn, err := grpc.Dial(daRpc, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 	if err != nil {
 		fmt.Printf("Unable to connect to EigenDA, aborting", "err", err)
