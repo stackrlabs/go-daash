@@ -64,9 +64,9 @@ type DAClient struct {
 }
 
 // Returns a newly initalised Avail DA client
-func New() (*DAClient, error) {
+func New(configPath string) (*DAClient, error) {
 	a := DAClient{}
-	err := a.config.GetConfig("./avail-config.json")
+	err := a.config.GetConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get config", err)
 	}
@@ -254,7 +254,7 @@ out:
 // Get returns Blob for each given ID, or an error.
 func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
-	blockHeight, leafIndex := splitID(ids[0])
+	blockHeight, leafIndex := SplitID(ids[0])
 	data, err := a.GetData(uint64(blockHeight), uint(leafIndex))
 	if err != nil {
 		return nil, fmt.Errorf("cannot get data", err)
@@ -327,8 +327,8 @@ func makeID(blockHeight uint32, leafIndex uint32) da.ID {
 	return da.ID(idBytes)
 }
 
-// splitID returns the block height and leaf index from a unique ID
-func splitID(id da.ID) (uint32, uint32) {
+// SplitID returns the block height and leaf index from a unique ID
+func SplitID(id da.ID) (uint32, uint32) {
 	heightLen := 4
 	leafIndexLen := 4
 	heightBytes := id[:heightLen]
