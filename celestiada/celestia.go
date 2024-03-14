@@ -181,5 +181,3 @@ func splitID(id da.ID) (uint64, da.Commitment) {
 	}
 	return binary.LittleEndian.Uint64(id[:heightLen]), id[heightLen:]
 }
-
-var _ da.DA = &CelestiaDA{}
