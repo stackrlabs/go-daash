@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Initialise Avail DA client
-	avail, err := availda.New()
+	avail, err := availda.New("./avail-config.json")
 	if err != nil {
 		fmt.Printf("failed to create avail client: %v", err)
 	}

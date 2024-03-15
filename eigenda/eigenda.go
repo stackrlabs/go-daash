@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-type EigendaDAClient struct {
+type Client struct {
 	// DaRpc is the HTTP provider URL for the Data Availability node.
 	DARpc string
 
@@ -31,7 +31,7 @@ type EigendaDAClient struct {
 }
 
 // New returns a new instance of the EigenDA client.
-func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInterval time.Duration) (*EigendaDAClient, error) {
+func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInterval time.Duration) (*Client, error) {
 	conn, err := grpc.Dial(daRpc, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 	if err != nil {
 		fmt.Printf("Unable to connect to EigenDA, aborting", "err", err)
@@ -45,7 +45,7 @@ func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInt
 		AdversaryThreshold: 25,
 		QuorumThreshold:    50,
 	})
-	return &EigendaDAClient{
+	return &Client{
 		DARpc:                      daRpc,
 		disperserClient:            daClient,
 		DADisperserSecurityParams:  disperserSecurityParams,
@@ -54,11 +54,11 @@ func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInt
 	}, nil
 }
 
-func (e *EigendaDAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
+func (e *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 	return 512 * 1024, nil // Currently set at 512KB
 }
 
-func (e *EigendaDAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
+func (e *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	blobInfo, err := e.disperseBlob(ctx, daBlobs[0])
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to disperse blob: %v", err)
@@ -67,7 +67,7 @@ func (e *EigendaDAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPric
 	return []da.ID{blobID}, []da.Proof{blobInfo.BlobVerificationProof.InclusionProof}, nil
 }
 
-func (e *EigendaDAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+func (e *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	blobIndex, batchHeaderHash := e.splitID(ids[0])
 	resp, err := e.disperserClient.RetrieveBlob(ctx, &RetrieveBlobRequest{
 		BlobIndex:       blobIndex,
@@ -79,30 +79,30 @@ func (e *EigendaDAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, erro
 	return []da.Blob{resp.Data}, nil
 }
 
-func (e *EigendaDAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
+func (e *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 	return nil, nil
 }
 
-func (e *EigendaDAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
+func (e *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
 	return nil, nil
 }
 
-func (e *EigendaDAClient) Validate(ctx context.Context, ids []da.ID, proofs []da.Proof) ([]bool, error) {
+func (e *Client) Validate(ctx context.Context, ids []da.ID, proofs []da.Proof) ([]bool, error) {
 	return nil, nil
 }
 
-func (e *EigendaDAClient) makeID(blobIndex uint32, batchHeaderHash []byte) da.ID {
+func (e *Client) makeID(blobIndex uint32, batchHeaderHash []byte) da.ID {
 	idBytes := make([]byte, 4+len(batchHeaderHash))
 	binary.BigEndian.PutUint32(idBytes[:4], blobIndex)
 	copy(idBytes[4:], batchHeaderHash)
 	return idBytes
 }
 
-func (e *EigendaDAClient) splitID(id da.ID) (uint32, []byte) {
+func (e *Client) splitID(id da.ID) (uint32, []byte) {
 	return binary.BigEndian.Uint32(id[:4]), id[4:]
 }
 
-func (e *EigendaDAClient) disperseBlob(ctx context.Context, txData []byte) (*BlobInfo, error) {
+func (e *Client) disperseBlob(ctx context.Context, txData []byte) (*BlobInfo, error) {
 	fmt.Println("Attempting to disperse blob to EigenDA")
 
 	disperseReq := &DisperseBlobRequest{

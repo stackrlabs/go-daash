@@ -16,6 +16,7 @@ require (
 	github.com/celestiaorg/celestia-app v1.6.0
 	github.com/celestiaorg/celestia-node v0.12.4
 	github.com/celestiaorg/nmt v0.20.0
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/cosmos/cosmos-sdk v0.46.16
