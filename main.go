@@ -28,7 +28,12 @@ func main() {
 	router := gin.Default()
 	ctx := context.Background()
 
-	envFile, _ := godotenv.Read(".env")
+	envFile, err := godotenv.Read(".env")
+	if err != nil {
+		fmt.Println("Error reading .env file")
+		
+		return
+	}
 
 	// Initialise Avail DA client
 	avail, err := NewAvailDA()
