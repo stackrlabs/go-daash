@@ -11,7 +11,6 @@ import (
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/share"
 	"github.com/joho/godotenv"
-	"github.com/rollkit/go-da"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
@@ -32,7 +31,7 @@ func main() {
 	router := gin.Default()
 	ctx := context.Background()
 
-	envFile, err := godotenv.Read(".env")
+	envFile, err := godotenv.Read("../../.env") // read from root
 	if err != nil {
 		fmt.Println("Error reading .env file")
 
@@ -107,7 +106,7 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message": "DAaaaSh",
+			"message": "Blob daashed and posted to " + daName + " 🏃",
 			"ids":     ids,
 			"proofs":  proofs,
 		})
