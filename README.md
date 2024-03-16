@@ -1,5 +1,7 @@
 # go-daash 🏃‍♂️
 
+![cover](./assets/cover.png)
+
 Unified interaction API for Data Availibility chains initially designed to work with Vulcan (Stackr's Verification Layer)
 
 This unified API for data availability services provides a scalable, secure, and efficient way for Vulcan to interact with different DA networks. It aims to standardize data access patterns, reduce complexity, and enhance the overall experience of using data availability services.
