@@ -1,1 +1,3 @@
-.env
+/.env
+./cmd/blob-server/avail-config.json
+

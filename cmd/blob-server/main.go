@@ -11,10 +11,13 @@ import (
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/share"
 	"github.com/joho/godotenv"
-	"github.com/rollkit/go-da"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
+	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/availda"
+	"github.com/stackrlabs/go-daash/celestiada"
+	"github.com/stackrlabs/go-daash/eigenda"
 )
 
 // Constants
@@ -28,7 +31,7 @@ func main() {
 	router := gin.Default()
 	ctx := context.Background()
 
-	envFile, err := godotenv.Read(".env")
+	envFile, err := godotenv.Read("../../.env") // read from root
 	if err != nil {
 		fmt.Println("Error reading .env file")
 
@@ -36,7 +39,7 @@ func main() {
 	}
 
 	// Initialise Avail DA client
-	avail, err := NewAvailDA()
+	avail, err := availda.New("./avail-config.json")
 	if err != nil {
 		fmt.Printf("failed to create avail client: %v", err)
 	}
@@ -60,10 +63,10 @@ func main() {
 		log.Fatalln("invalid hex value of a namespace:", err)
 	}
 	namespace, err := share.NewBlobNamespaceV0(nsBytes)
-	celestia := NewCelestiaDA(client, namespace, -1, ctx)
+	celestia := celestiada.NewClient(client, namespace, -1, ctx)
 
 	// Initalise EigenDA client
-	eigen, err := NewEigendaDAClient(EigenDaRpcUrl, time.Second*90, time.Second*5)
+	eigen, err := eigenda.New(EigenDaRpcUrl, time.Second*90, time.Second*5)
 	if err != nil {
 		fmt.Printf("failed to create eigen client: %v", err)
 	}
@@ -103,7 +106,7 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message": "DAaaaSh",
+			"message": "Blob daashed and posted to " + daName + " 🏃",
 			"ids":     ids,
 			"proofs":  proofs,
 		})

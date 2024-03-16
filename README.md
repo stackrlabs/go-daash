@@ -39,8 +39,14 @@ Each micro-rollup should be easily able to switch
 
 ### Steps to run
 
-1. Clone the repository
-2.
+```bash
+git clone https://github.com/stackrlabs/go-daash # clone the repository
+cd go-daash/cmd/blob-server
+go run . # run the server
+curl --location 'localhost:8080/eigen' \
+--header 'Content-Type: application/json' \
+--data 'gm' # DAash away!
+```
 
 ### Additional requirements
 
@@ -53,12 +59,3 @@ You need an auth token to run your Celestia light node. Copy the `.env.example` 
 cp .env.example .env
 ```
 
-## Installation/Running
-
-```bash
-go build .
-go run .
-curl --location 'localhost:8080/Celestia' \
---header 'Content-Type: application/json' \
---data 'gm'
-```

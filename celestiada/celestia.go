@@ -1,4 +1,4 @@
-package main
+package celestiada
 
 import (
 	"context"
@@ -28,7 +28,7 @@ type CelestiaDA struct {
 }
 
 // NewCelestiaDA returns an instance of CelestiaDA
-func NewCelestiaDA(client *rpc.Client, namespace share.Namespace, gasPrice float64, ctx context.Context) *CelestiaDA {
+func NewClient(client *rpc.Client, namespace share.Namespace, gasPrice float64, ctx context.Context) *CelestiaDA {
 	return &CelestiaDA{
 		client:    client,
 		namespace: namespace,
@@ -181,5 +181,3 @@ func splitID(id da.ID) (uint64, da.Commitment) {
 	}
 	return binary.LittleEndian.Uint64(id[:heightLen]), id[heightLen:]
 }
-
-var _ da.DA = &CelestiaDA{}

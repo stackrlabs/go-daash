@@ -1,4 +1,4 @@
-package main
+package availda
 
 import (
 	"context"
@@ -22,10 +22,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
-
-type DAClient interface {
-	PostData(txData []byte) (*BatchDAData, error)
-}
 
 type AccountNextIndexRPCResponse struct {
 	Result uint `json:"result"`
@@ -55,7 +51,7 @@ type DataProof struct {
 	Leaf           string   `json:"leaf"`
 }
 
-type AvailDA struct {
+type DAClient struct {
 	config             Config
 	API                *gsrpc.SubstrateAPI
 	Meta               *types.Metadata
@@ -67,9 +63,10 @@ type AvailDA struct {
 	DestinationDomain  types.UCompact
 }
 
-func NewAvailDA() (*AvailDA, error) {
-	a := AvailDA{}
-	err := a.config.GetConfig("./avail-config.json")
+// Returns a newly initalised Avail DA client
+func New(configPath string) (*DAClient, error) {
+	a := DAClient{}
+	err := a.config.GetConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get config", err)
 	}
@@ -122,14 +119,14 @@ func NewAvailDA() (*AvailDA, error) {
 }
 
 // MaxBlobSize returns the max blob size
-func (c *AvailDA) MaxBlobSize(ctx context.Context) (uint64, error) {
+func (c *DAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
 	var maxBlobSize uint64 = 64 * 64 * 500
 	return maxBlobSize, nil
 }
 
 // Submit a list of blobs to Avail DA
 // Currently, we submit to a trusted RPC Avail node. In the future, we will submit via an Avail light client.
-func (a *AvailDA) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
+func (a *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	// TODO: Add support for multiple blobs
 	daBlob := daBlobs[0]
 	log.Println("data", zap.Any("data", daBlob))
@@ -241,7 +238,7 @@ out:
 	dataProof := dataProofResp.Result.DataProof
 
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := a.makeID(uint32(block.Block.Header.Number), uint32(dataProof.LeafIndex))
+	blobID := makeID(uint32(block.Block.Header.Number), uint32(dataProof.LeafIndex))
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -255,9 +252,9 @@ out:
 }
 
 // Get returns Blob for each given ID, or an error.
-func (a *AvailDA) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
-	blockHeight, leafIndex := a.splitID(ids[0])
+	blockHeight, leafIndex := SplitID(ids[0])
 	data, err := a.GetData(uint64(blockHeight), uint(leafIndex))
 	if err != nil {
 		return nil, fmt.Errorf("cannot get data", err)
@@ -267,19 +264,19 @@ func (a *AvailDA) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 }
 
 // GetIDs returns IDs of all Blobs located in DA at given height.
-func (a *AvailDA) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
+func (a *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
 
 // Commit creates a Commitment for each given Blob.
-func (a *AvailDA) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
+func (a *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-func (c *AvailDA) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
+func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
@@ -295,7 +292,7 @@ func (b BatchDAData) IsEmpty() bool {
 	return reflect.DeepEqual(b, BatchDAData{})
 }
 
-func (a AvailDA) GetAccountNextIndex() (types.UCompact, error) {
+func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	// TODO: Add context to the request
 	resp, err := http.Post("https://goldberg.avail.tools/api", "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
 	if err != nil {
@@ -318,7 +315,7 @@ func (a AvailDA) GetAccountNextIndex() (types.UCompact, error) {
 }
 
 // makeID creates a unique ID to reference a blob on Avail
-func (a *AvailDA) makeID(blockHeight uint32, leafIndex uint32) da.ID {
+func makeID(blockHeight uint32, leafIndex uint32) da.ID {
 	// Serialise height and leaf index to binary
 	heightLen := 4
 	leafIndexLen := 4
@@ -330,8 +327,8 @@ func (a *AvailDA) makeID(blockHeight uint32, leafIndex uint32) da.ID {
 	return da.ID(idBytes)
 }
 
-// splitID returns the block height and leaf index from a unique ID
-func (a *AvailDA) splitID(id da.ID) (uint32, uint32) {
+// SplitID returns the block height and leaf index from a unique ID
+func SplitID(id da.ID) (uint32, uint32) {
 	heightLen := 4
 	leafIndexLen := 4
 	heightBytes := id[:heightLen]
@@ -341,7 +338,7 @@ func (a *AvailDA) splitID(id da.ID) (uint32, uint32) {
 	return blockHeight, leafIndex
 }
 
-func (a AvailDA) GetData(blockNumber uint64, index uint) ([]byte, error) {
+func (a *DAClient) GetData(blockNumber uint64, index uint) ([]byte, error) {
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get block hash", err)
