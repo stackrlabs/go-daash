@@ -3,5 +3,4 @@
     "api_url": "wss://goldberg.avail.tools:443/ws",
     "app_id": 1,
     "timeout": 600
-    }
-    
+}
