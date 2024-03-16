@@ -13,6 +13,8 @@ require (
 	github.com/rollkit/go-da v0.2.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.18.0
+	google.golang.org/grpc v1.60.1
+	google.golang.org/protobuf v1.32.0
 )
 
 require (
@@ -28,7 +30,6 @@ require (
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
 	github.com/Jorropo/jsync v1.0.1 // indirect
-	github.com/Layr-Labs/eigenda/api v0.1.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
@@ -331,8 +332,6 @@ require (
 	google.golang.org/genproto v0.0.0-20231002182017-d307bd883b97 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
-	google.golang.org/grpc v1.60.1 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

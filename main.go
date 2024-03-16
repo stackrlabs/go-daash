@@ -31,7 +31,7 @@ func main() {
 	envFile, err := godotenv.Read(".env")
 	if err != nil {
 		fmt.Println("Error reading .env file")
-		
+
 		return
 	}
 
