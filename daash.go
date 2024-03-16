@@ -22,6 +22,7 @@ type DAManager struct {
 
 // Initialize all the DA clients
 func (d *DAManager) Init(availConfigPath string) error {
+	d.Clients = make(map[DAType]da.DA)
 	var err error
 	// Initialize Avail
 	var avail da.DA

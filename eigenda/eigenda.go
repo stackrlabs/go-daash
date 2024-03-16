@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/rollkit/go-da"
@@ -34,7 +35,7 @@ type Client struct {
 func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInterval time.Duration) (*Client, error) {
 	conn, err := grpc.Dial(daRpc, grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, "")))
 	if err != nil {
-		fmt.Printf("Unable to connect to EigenDA, aborting", "err", err)
+		fmt.Println("Unable to connect to EigenDA, aborting", "err", err)
 		return nil, err
 	}
 	daClient := NewDisperserClient(conn)
@@ -45,6 +46,7 @@ func New(daRpc string, daStatusQueryTimeout time.Duration, daStatusQueryRetryInt
 		AdversaryThreshold: 25,
 		QuorumThreshold:    50,
 	})
+	log.Println("🟢 EigenDA client initalised")
 	return &Client{
 		DARpc:                      daRpc,
 		disperserClient:            daClient,
