@@ -2,7 +2,7 @@
 
 ![cover](./assets/cover.png)
 
-Unified interaction API for Data Availibility chains initially designed to work with Vulcan (Stackr's Verification Layer)
+Unified interaction API for Data Availability chains initially designed to work with Vulcan (Stackr's Verification Layer)
 
 This unified API for data availability services provides a scalable, secure, and efficient way for Vulcan to interact with different DA networks. It aims to standardize data access patterns, reduce complexity, and enhance the overall experience of using data availability services.
 
@@ -47,10 +47,10 @@ Each micro-rollup should be easily able to switch
 Avail and EigenDA runs via external RPC providers however Celestia requires a running light node to be able to post blobs through `go-daash`.
 
 You can find the instructions to run the light node [here](https://docs.celestia.org/developers/node-tutorial).
-Also export auth token as environment variable:
+You need an auth token to run your Celestia light node. Copy the `.env.example` file to `.env` and set the `CELESTIA_AUTH_TOKEN` environment variable to the auth token.
 
 ```bash
-export CELESTIA_AUTH_TOKEN=<your_auth_token>
+cp .env.example .env
 ```
 
 ## Installation/Running
