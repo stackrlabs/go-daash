@@ -52,10 +52,20 @@ curl --location 'localhost:8080/eigen' \
 
 Avail and EigenDA runs via external RPC providers however Celestia requires a running light node to be able to post blobs through `go-daash`.
 
+For Avail, you need to provide the path to a JSON config file with the following structure:
+
+```json
+{
+  "seed": "<your seed phrases>",
+  "api_url": "wss://goldberg.avail.tools:443/ws",
+  "app_id": 1,
+  "timeout": 600
+}
+```
+
 You can find the instructions to run the light node [here](https://docs.celestia.org/developers/node-tutorial).
 You need an auth token to run your Celestia light node. Copy the `.env.example` file to `.env` and set the `CELESTIA_AUTH_TOKEN` environment variable to the auth token.
 
 ```bash
 cp .env.example .env
 ```
-
