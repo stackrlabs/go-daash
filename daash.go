@@ -1,48 +1,72 @@
 package daash
 
 import (
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/cenkalti/backoff"
 	"github.com/rollkit/go-da"
+	"github.com/rollkit/go-da/test"
 	"github.com/stackrlabs/go-daash/availda"
 	"github.com/stackrlabs/go-daash/eigenda"
 )
 
-type DAType string
+type DALayer string
 
 const (
-	Avail DAType = "avail"
-	Eigen DAType = "eigen"
+	Avail DALayer = "avail"
+	Eigen DALayer = "eigen"
+	Mock  DALayer = "mock"
 )
 
-type DAManager struct {
-	Clients map[DAType]da.DA
+func IsValidDA(layer DALayer) bool {
+	for _, validLayer := range []DALayer{Avail, Eigen, Mock} {
+		if layer == validLayer {
+			return true
+		}
+	}
+	return false
 }
 
-// Initialize all the DA clients
-func (d *DAManager) Init(availConfigPath string) error {
-	d.Clients = make(map[DAType]da.DA)
-	var err error
-	// Initialize Avail
-	var avail da.DA
-	err = backoff.Retry(func() error {
-		avail, err = availda.New(availConfigPath)
-		return err //nolint: wrapcheck
-	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
-	if err != nil {
-		return err
+type DAManager struct {
+	Clients map[DALayer]da.DA
+}
+
+// Initiates a new DAManager with clients from the sepcified DA layers
+func NewDAManager(layers []DALayer, availConfigPath string) (*DAManager, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("no da layers provided")
 	}
-	d.Clients[Avail] = avail
 
-	// Initialize Eigen
-	eigen, err := eigenda.New("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
-	if err != nil {
-		return err
+	d := &DAManager{}
+	d.Clients = make(map[DALayer]da.DA)
+	for _, layer := range layers {
+		switch layer {
+		case Avail:
+			var avail da.DA
+			var err error
+			err = backoff.Retry(func() error {
+				avail, err = availda.New(availConfigPath)
+				return err //nolint: wrapcheck
+			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
+			if err != nil {
+				return nil, err
+			}
+			log.Println("🟢 Avail DA client initialised")
+			d.Clients[Avail] = avail
+		case Eigen:
+			eigen, err := eigenda.New("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+			if err != nil {
+				return nil, err
+			}
+			d.Clients[Eigen] = eigen
+		case Mock:
+			d.Clients[Mock] = test.NewDummyDA()
+			log.Println("🟢 Mock DA client initialised")
+		default:
+			return nil, fmt.Errorf("invalid da layer provided: %s", layer)
+		}
 	}
-	d.Clients[Eigen] = eigen
-
-	// TODO: Initialize Celestia
-
-	return nil
+	return d, nil
 }

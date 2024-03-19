@@ -114,7 +114,6 @@ func New(configPath string) (*DAClient, error) {
 	// }
 
 	// DestinationDomain = types.NewUCompactFromUInt(uint64(Config.DestinationDomain))
-	fmt.Println("🟢 Avail DA initialized", a)
 	return &a, nil
 }
 
