@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/joho/godotenv"
@@ -18,6 +21,51 @@ const (
 	EigenDaRpcUrl = "disperser-goerli.eigenda.xyz:443"
 )
 
+type Job struct {
+	Data   []byte
+	Layer  daash.DALayer
+	ID     string
+	Status map[string]any // Human-readable job status
+}
+type BlobServer struct {
+	queue   chan Job
+	Daasher *daash.DABuilder
+	Jobs    map[string]Job
+}
+
+func NewBlobServer() *BlobServer {
+	return &BlobServer{
+		queue:   make(chan Job, 10),
+		Jobs:    make(map[string]Job),
+		Daasher: daash.NewDABuilder(),
+	}
+}
+
+func (b *BlobServer) runJobPool() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for job := range b.queue {
+		go func(job Job) {
+			var jobStatus map[string]any
+			ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
+			if err != nil {
+				jobStatus = gin.H{
+					"status": "failed",
+					"error":  err,
+				}
+			} else {
+				jobStatus = gin.H{
+					"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
+					"ids":    ids,
+					"proofs": proofs,
+				}
+			}
+			b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
+
+		}(job)
+	}
+}
+
 func main() {
 	// initiates a gin Engine with the default logger and recovery middleware
 	router := gin.Default()
@@ -31,16 +79,13 @@ func main() {
 	}
 	authToken := envFile["CELESTIA_AUTH_TOKEN"]
 
+	server := NewBlobServer()
 	// Initialise all DA clients
-	builder := daash.NewDABuilder()
-	err = builder.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken)
+	err = server.Daasher.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken)
 	if err != nil {
 		fmt.Printf("failed to build DA clients: %v", err)
 		return
 	}
-	daClients := builder.Clients
-
-	//TODO: Add a job queue with random ID per job
 
 	router.POST("/:daName", func(c *gin.Context) {
 		daName := c.Param("daName")
@@ -61,27 +106,34 @@ func main() {
 			return
 		}
 
-		// Post the data to DA
-		ids, proofs, err := postToDA(c, data, daClients[daLayer])
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("post to DA: %v", err),
+		jobID := generateJobID()
+		job := Job{Data: data, Layer: daLayer, ID: jobID, Status: gin.H{
+			"status": "pending",
+			"jobID":  jobID,
+		}}
+		server.queue <- job
+		server.Jobs[jobID] = job
+		c.JSON(http.StatusOK, job.Status)
+	})
+
+	router.GET("/status/:jobID", func(c *gin.Context) {
+		jobID := c.Param("jobID")
+		job, ok := server.Jobs[jobID]
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": fmt.Sprintf("job %s not found", jobID),
 			})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Blob daashed and posted to " + daName + " 🏃",
-			"ids":     ids,
-			"proofs":  proofs,
-		})
+		c.JSON(http.StatusOK, job.Status)
 	})
 
-	// Run implements a http.ListenAndServe() and takes in an optional Port number
+	go server.runJobPool()
 	// The default port is :8080
 	router.Run()
 }
 
-func postToDA(c *gin.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
+func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
 	daProofs := make([]da.Proof, 1)
 	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
@@ -98,4 +150,14 @@ func postToDA(c *gin.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof,
 		return nil, nil, fmt.Errorf("retry: %w", err)
 	}
 	return daProofs, daIDs, nil
+}
+
+func generateJobID() string {
+	b := make([]byte, 16) // Generates a 128-bit (16 bytes) random hex string
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Fatalf("error generating random hex string: %v", err)
+	}
+	randomHexString := hex.EncodeToString(b)
+	return randomHexString
 }
