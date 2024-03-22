@@ -69,3 +69,8 @@ You need an auth token for your Celestia light node. Copy the `.env.example` fil
 ```bash
 cp .env.example .env
 ```
+
+## Built with
+- `go-da` and `celestia-da` libraries from [Rollkit](https://github.com/rollkit/go-da)
+
+

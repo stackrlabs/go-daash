@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/joho/godotenv"
 
@@ -30,7 +31,8 @@ type Job struct {
 type BlobServer struct {
 	queue   chan Job
 	Daasher *daash.DABuilder
-	Jobs    map[string]Job
+	Jobs    map[string]Job // map of job ID to job
+	sync.Mutex
 }
 
 func NewBlobServer() *BlobServer {
@@ -60,7 +62,9 @@ func (b *BlobServer) runJobPool() {
 					"proofs": proofs,
 				}
 			}
+			b.Lock()
 			b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
+			b.Unlock()
 
 		}(job)
 	}
@@ -112,7 +116,9 @@ func main() {
 			"jobID":  jobID,
 		}}
 		server.queue <- job
+		server.Lock()
 		server.Jobs[jobID] = job
+		server.Unlock()
 		c.JSON(http.StatusOK, job.Status)
 	})
 
@@ -145,7 +151,7 @@ func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Pro
 		daProofs = proofs
 		daIDs = ids
 		return nil
-	}, backoff.NewExponentialBackOff())
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3))
 	if err != nil {
 		return nil, nil, fmt.Errorf("retry: %w", err)
 	}
