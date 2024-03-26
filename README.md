@@ -12,7 +12,7 @@ As an un-opinionated/agnostic framework Stackr should support all different kind
 
 Each DA layer has a different RPC, a different API and different Data formats. Each service also requires holding their native tokens and there are many other nuances to these as well including security models etc.
 
-Each micro-rollup should be easily able to switch
+Every micro-rollup should be easily able to switch between different DA networks with minimal changes to their codebase.
 
 ## Supported Networks
 
@@ -50,7 +50,7 @@ curl --location 'localhost:8080/eigen' \
 
 ### Additional requirements
 
-Avail and EigenDA runs via external RPC providers however Celestia requires a running light node to be able to post blobs through `go-daash`.
+Avail and EigenDA run via external RPC providers while Celestia requires a running light node to be able to post blobs through `go-daash`.
 
 For Avail, you need to provide the path to a JSON config file with the following structure:
 
@@ -63,9 +63,14 @@ For Avail, you need to provide the path to a JSON config file with the following
 }
 ```
 
-You can find the instructions to run the light node [here](https://docs.celestia.org/developers/node-tutorial).
-You need an auth token to run your Celestia light node. Copy the `.env.example` file to `.env` and set the `CELESTIA_AUTH_TOKEN` environment variable to the auth token.
+For Celestia, you can find the instructions to run the light node [here](https://docs.celestia.org/developers/node-tutorial).
+You need an auth token for your Celestia light node. Copy the `.env.example` file to `.env` and set the `CELESTIA_AUTH_TOKEN` environment variable to the auth token.
 
 ```bash
 cp .env.example .env
 ```
+
+## Built with
+- `go-da` and `celestia-da` libraries from [Rollkit](https://github.com/rollkit/go-da)
+
+

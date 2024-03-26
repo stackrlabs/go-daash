@@ -2,29 +2,56 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
+	"sync"
 
-	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
-	"github.com/celestiaorg/celestia-node/share"
 	"github.com/joho/godotenv"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash"
 	"github.com/stackrlabs/go-daash/availda"
 	"github.com/stackrlabs/go-daash/celestiada"
-	"github.com/stackrlabs/go-daash/eigenda"
 )
 
 // Constants
 const (
-	CelestiaClientUrl = "http://localhost:26658"
-	EigenDaRpcUrl     = "disperser-goerli.eigenda.xyz:443"
+	EigenDaRpcUrl = "disperser-goerli.eigenda.xyz:443"
 )
+
+type Job struct {
+	Data   []byte
+	Layer  daash.DALayer
+	ID     string
+	Status map[string]any // Human-readable job status
+}
+type BlobServer struct {
+	queue   chan Job
+	Daasher *daash.DABuilder
+	Jobs    map[string]Job // map of job ID to job
+	sync.Mutex
+}
+
+func NewBlobServer() *BlobServer {
+	return &BlobServer{
+		queue:   make(chan Job, 10),
+		Jobs:    make(map[string]Job),
+		Daasher: daash.NewDABuilder(),
+	}
+}
+
+func (b *BlobServer) runJobPool() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for job := range b.queue {
+		go run(ctx, b, job)
+	}
+}
 
 func main() {
 	// initiates a gin Engine with the default logger and recovery middleware
@@ -37,51 +64,20 @@ func main() {
 
 		return
 	}
-
-	// Initialise Avail DA client
-	avail, err := availda.New("./avail-config.json")
-	if err != nil {
-		fmt.Printf("failed to create avail client: %v", err)
-	}
-
-	// Initialise Celestia DA client
-	// Read auth token from env
 	authToken := envFile["CELESTIA_AUTH_TOKEN"]
-	if authToken == "" {
-		fmt.Println("AUTH_TOKEN is not set")
+
+	server := NewBlobServer()
+	// Initialise all DA clients
+	err = server.Daasher.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken)
+	if err != nil {
+		fmt.Printf("failed to build DA clients: %v", err)
 		return
-	}
-	client, err := rpc.NewClient(ctx, CelestiaClientUrl, authToken)
-	if err != nil {
-		fmt.Printf("failed to create rpc client: %v", err)
-	}
-
-	// Use random hex for namespace
-	nsBytes := make([]byte, 10)
-	_, err = hex.Decode(nsBytes, []byte("9cb73e106b03d1050a13"))
-	if err != nil {
-		log.Fatalln("invalid hex value of a namespace:", err)
-	}
-	namespace, err := share.NewBlobNamespaceV0(nsBytes)
-	celestia := celestiada.NewClient(client, namespace, -1, ctx)
-
-	// Initalise EigenDA client
-	eigen, err := eigenda.New(EigenDaRpcUrl, time.Second*90, time.Second*5)
-	if err != nil {
-		fmt.Printf("failed to create eigen client: %v", err)
-	}
-
-	// Map of DA clients
-	daClients := map[string]da.DA{
-		"avail":    avail,
-		"celestia": celestia,
-		"eigen":    eigen,
 	}
 
 	router.POST("/:daName", func(c *gin.Context) {
 		daName := c.Param("daName")
-
-		if _, ok := daClients[daName]; !ok {
+		daLayer := daash.DALayer(daName)
+		if !daash.IsValidDA(daLayer) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"message": fmt.Sprintf("DA %s not found", daName),
 			})
@@ -97,27 +93,36 @@ func main() {
 			return
 		}
 
-		// Post the data to DA
-		ids, proofs, err := postToDA(c, data, daClients[daName])
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("post to DA: %v", err),
+		jobID := generateJobID()
+		job := Job{Data: data, Layer: daLayer, ID: jobID, Status: gin.H{
+			"status": "pending",
+			"jobID":  jobID,
+		}}
+		server.queue <- job
+		server.Lock()
+		server.Jobs[jobID] = job
+		server.Unlock()
+		c.JSON(http.StatusOK, job.Status)
+	})
+
+	router.GET("/status/:jobID", func(c *gin.Context) {
+		jobID := c.Param("jobID")
+		job, ok := server.Jobs[jobID]
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": fmt.Sprintf("job %s not found", jobID),
 			})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Blob daashed and posted to " + daName + " 🏃",
-			"ids":     ids,
-			"proofs":  proofs,
-		})
+		c.JSON(http.StatusOK, job.Status)
 	})
 
-	// Run implements a http.ListenAndServe() and takes in an optional Port number
+	go server.runJobPool()
 	// The default port is :8080
 	router.Run()
 }
 
-func postToDA(c *gin.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
+func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
 	daProofs := make([]da.Proof, 1)
 	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
@@ -129,9 +134,56 @@ func postToDA(c *gin.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof,
 		daProofs = proofs
 		daIDs = ids
 		return nil
-	}, backoff.NewExponentialBackOff())
+	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3))
 	if err != nil {
 		return nil, nil, fmt.Errorf("retry: %w", err)
 	}
 	return daProofs, daIDs, nil
+}
+
+func generateJobID() string {
+	b := make([]byte, 16) // Generates a 128-bit (16 bytes) random hex string
+	_, err := rand.Read(b)
+	if err != nil {
+		log.Fatalf("error generating random hex string: %v", err)
+	}
+	randomHexString := hex.EncodeToString(b)
+	return randomHexString
+}
+
+func getSuccessLink(daClient da.DA, ids []da.ID) string {
+	switch daClient := daClient.(type) {
+	case *celestiada.DAClient:
+		namespace := daClient.Namespace.String()
+		// remove 2 leading zero of namespace
+		namespace = namespace[2:]
+		return fmt.Sprintf("https://mocha-4.celenium.io/namespace/%s", namespace)
+	case *availda.DAClient:
+		_, extHash := availda.SplitID(ids[0])
+		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extHash)
+	default:
+		return ""
+	}
+}
+
+func run(ctx context.Context, b *BlobServer, job Job) {
+	var jobStatus map[string]any
+	ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
+	if err != nil {
+		jobStatus = gin.H{
+			"status": "failed",
+			"error":  err,
+		}
+	} else {
+		successLink := getSuccessLink(b.Daasher.Clients[job.Layer], ids)
+		jobStatus = gin.H{
+			"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
+			"ids":    ids,
+			"proofs": proofs,
+			"link":   successLink,
+		}
+	}
+	b.Lock()
+	b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
+	b.Unlock()
 }
