@@ -240,7 +240,7 @@ out:
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot marshal extrinsic", err)
 	}
-	d // Strip string of any leading or following quotes
+	// Strip string of any leading or following quotes
 	extBytes = []byte(strings.Trim(string(extBytes), "\""))
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
 	blobID := makeID(uint32(block.Block.Header.Number), string(extBytes))
