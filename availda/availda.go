@@ -236,8 +236,14 @@ out:
 	}
 	dataProof := dataProofResp.Result.DataProof
 
+	extBytes, err := json.Marshal(ext)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot marshal extrinsic", err)
+	}
+	d // Strip string of any leading or following quotes
+	extBytes = []byte(strings.Trim(string(extBytes), "\""))
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := makeID(uint32(block.Block.Header.Number), uint32(dataProof.LeafIndex))
+	blobID := makeID(uint32(block.Block.Header.Number), string(extBytes))
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -253,8 +259,8 @@ out:
 // Get returns Blob for each given ID, or an error.
 func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
-	blockHeight, leafIndex := SplitID(ids[0])
-	data, err := a.GetData(uint64(blockHeight), uint(leafIndex))
+	blockHeight, extHash := SplitID(ids[0])
+	data, err := a.GetData(uint64(blockHeight), extHash)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get data", err)
 	}
@@ -314,30 +320,25 @@ func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 }
 
 // makeID creates a unique ID to reference a blob on Avail
-func makeID(blockHeight uint32, leafIndex uint32) da.ID {
+func makeID(blockHeight uint32, extHash string) da.ID {
 	// Serialise height and leaf index to binary
 	heightLen := 4
-	leafIndexLen := 4
 	heightBytes := make([]byte, heightLen)
-	leafIndexBytes := make([]byte, leafIndexLen)
 	binary.LittleEndian.PutUint32(heightBytes, blockHeight)
-	binary.LittleEndian.PutUint32(leafIndexBytes, leafIndex)
-	idBytes := append(heightBytes, leafIndexBytes...)
+	idBytes := append(heightBytes, []byte(extHash)...)
 	return da.ID(idBytes)
 }
 
 // SplitID returns the block height and leaf index from a unique ID
-func SplitID(id da.ID) (uint32, uint32) {
+func SplitID(id da.ID) (uint32, string) {
 	heightLen := 4
-	leafIndexLen := 4
 	heightBytes := id[:heightLen]
-	leafIndexBytes := id[heightLen : heightLen+leafIndexLen]
+	extHashBytes := id[heightLen:]
 	blockHeight := binary.LittleEndian.Uint32(heightBytes)
-	leafIndex := binary.LittleEndian.Uint32(leafIndexBytes)
-	return blockHeight, leafIndex
+	return blockHeight, string(extHashBytes)
 }
 
-func (a *DAClient) GetData(blockNumber uint64, index uint) ([]byte, error) {
+func (a *DAClient) GetData(blockNumber uint64, extHash string) ([]byte, error) {
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get block hash", err)
@@ -348,14 +349,19 @@ func (a *DAClient) GetData(blockNumber uint64, index uint) ([]byte, error) {
 		return nil, fmt.Errorf("cannot get block", err)
 	}
 
-	var data [][]byte
+	var data []byte
 	for _, ext := range block.Block.Extrinsics {
-		if ext.Method.CallIndex.SectionIndex == 29 && ext.Method.CallIndex.MethodIndex == 1 {
-			data = append(data, ext.Method.Args[2:])
+		extBytes, err := json.Marshal(ext)
+		if err != nil {
+			return nil, fmt.Errorf("cannot marshal extrinsic", err)
+		}
+		if string(extBytes) == extHash {
+			data = ext.Method.Args[2:]
+			break
 		}
 	}
 
-	return data[index], nil
+	return data, nil
 }
 
 type Config struct {

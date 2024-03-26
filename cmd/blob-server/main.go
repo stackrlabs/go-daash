@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
+	"github.com/stackrlabs/go-daash/availda"
 )
 
 // Constants
@@ -56,10 +57,21 @@ func (b *BlobServer) runJobPool() {
 					"error":  err,
 				}
 			} else {
-				jobStatus = gin.H{
-					"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
-					"ids":    ids,
-					"proofs": proofs,
+				if job.Layer == daash.Avail {
+					_, extHash := availda.SplitID(ids[0])
+					link := fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extHash)
+					jobStatus = gin.H{
+						"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
+						"ids":    ids,
+						"proofs": proofs,
+						"link":   link,
+					}
+				} else {
+					jobStatus = gin.H{
+						"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
+						"ids":    ids,
+						"proofs": proofs,
+					}
 				}
 			}
 			b.Lock()
