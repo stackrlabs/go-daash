@@ -16,6 +16,7 @@ import (
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
 	"github.com/stackrlabs/go-daash/availda"
+	"github.com/stackrlabs/go-daash/celestiada"
 )
 
 // Constants
@@ -48,37 +49,7 @@ func (b *BlobServer) runJobPool() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for job := range b.queue {
-		go func(job Job) {
-			var jobStatus map[string]any
-			ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
-			if err != nil {
-				jobStatus = gin.H{
-					"status": "failed",
-					"error":  err,
-				}
-			} else {
-				if job.Layer == daash.Avail {
-					_, extHash := availda.SplitID(ids[0])
-					link := fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extHash)
-					jobStatus = gin.H{
-						"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
-						"ids":    ids,
-						"proofs": proofs,
-						"link":   link,
-					}
-				} else {
-					jobStatus = gin.H{
-						"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
-						"ids":    ids,
-						"proofs": proofs,
-					}
-				}
-			}
-			b.Lock()
-			b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
-			b.Unlock()
-
-		}(job)
+		go run(ctx, b, job)
 	}
 }
 
@@ -178,4 +149,41 @@ func generateJobID() string {
 	}
 	randomHexString := hex.EncodeToString(b)
 	return randomHexString
+}
+
+func getSuccessLink(daClient da.DA, ids []da.ID) string {
+	switch daClient := daClient.(type) {
+	case *celestiada.DAClient:
+		namespace := daClient.Namespace.String()
+		// remove 2 leading zero of namespace
+		namespace = namespace[2:]
+		return fmt.Sprintf("https://mocha-4.celenium.io/namespace/%s", namespace)
+	case *availda.DAClient:
+		_, extHash := availda.SplitID(ids[0])
+		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extHash)
+	default:
+		return ""
+	}
+}
+
+func run(ctx context.Context, b *BlobServer, job Job) {
+	var jobStatus map[string]any
+	ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
+	if err != nil {
+		jobStatus = gin.H{
+			"status": "failed",
+			"error":  err,
+		}
+	} else {
+		successLink := getSuccessLink(b.Daasher.Clients[job.Layer], ids)
+		jobStatus = gin.H{
+			"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
+			"ids":    ids,
+			"proofs": proofs,
+			"link":   successLink,
+		}
+	}
+	b.Lock()
+	b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
+	b.Unlock()
 }

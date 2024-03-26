@@ -24,7 +24,7 @@ import (
 // CelestiaDA implements the celestia backend for the DA interface
 type DAClient struct {
 	client    *rpc.Client
-	namespace share.Namespace
+	Namespace share.Namespace
 	gasPrice  float64
 	ctx       context.Context
 }
@@ -48,7 +48,7 @@ func New(ctx context.Context, lightCLientRPCUrl string, authToken string, hexNam
 	}
 	return &DAClient{
 		client:    client,
-		namespace: namespace,
+		Namespace: namespace,
 		gasPrice:  gasPrice,
 		ctx:       ctx,
 	}, nil
@@ -65,7 +65,7 @@ func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	var blobs []da.Blob
 	for _, id := range ids {
 		height, commitment := splitID(id)
-		blob, err := c.client.Blob.Get(ctx, height, c.namespace, commitment)
+		blob, err := c.client.Blob.Get(ctx, height, c.Namespace, commitment)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 // GetIDs returns IDs of all Blobs located in DA at given height.
 func (c *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 	var ids []da.ID
-	blobs, err := c.client.Blob.GetAll(ctx, height, []share.Namespace{c.namespace})
+	blobs, err := c.client.Blob.GetAll(ctx, height, []share.Namespace{c.Namespace})
 	if err != nil {
 		if strings.Contains(err.Error(), blob.ErrBlobNotFound.Error()) {
 			return nil, nil
@@ -119,12 +119,13 @@ func (c *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float
 	if err != nil {
 		return nil, nil, err
 	}
+
 	log.Println("successfully submitted blobs", "height", height, "gas", options.GasLimit, "fee", options.Fee)
 	ids := make([]da.ID, len(daBlobs))
 	proofs := make([]da.Proof, len(daBlobs))
 	for i, commitment := range commitments {
 		ids[i] = makeID(height, commitment)
-		proof, err := c.client.Blob.GetProof(ctx, height, c.namespace, commitment)
+		proof, err := c.client.Blob.GetProof(ctx, height, c.Namespace, commitment)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -142,7 +143,7 @@ func (c *DAClient) blobsAndCommitments(daBlobs []da.Blob) ([]*blob.Blob, []da.Co
 	var blobs []*blob.Blob
 	var commitments []da.Commitment
 	for _, daBlob := range daBlobs {
-		b, err := blob.NewBlobV0(c.namespace, daBlob)
+		b, err := blob.NewBlobV0(c.Namespace, daBlob)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -174,7 +175,7 @@ func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proo
 		// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
 		//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
 		//    there is no way of gently handling errors here, but returned value is fine for us
-		isIncluded, _ := c.client.Blob.Included(ctx, height, c.namespace, proofs[i], commitment)
+		isIncluded, _ := c.client.Blob.Included(ctx, height, c.Namespace, proofs[i], commitment)
 		included = append(included, isIncluded)
 	}
 	return included, nil
