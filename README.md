@@ -6,6 +6,10 @@ Unified interaction API for Data Availability chains initially designed to work 
 
 This unified API for data availability services provides a scalable, secure, and efficient way for Vulcan to interact with different DA networks. It aims to standardize data access patterns, reduce complexity, and enhance the overall experience of using data availability services.
 
+## Demo
+
+Checkout go-daash in action -> [BlobDaddy 👨🏻](https://blob-daddy.stf.xyz/) 
+
 ## Motivation
 
 As an un-opinionated/agnostic framework Stackr should support all different kind of DA layers and provide a smooth abstracted experience across the different DA layers.
