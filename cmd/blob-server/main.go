@@ -68,7 +68,7 @@ func main() {
 
 	server := NewBlobServer()
 	// Initialise all DA clients
-	err = server.Daasher.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken)
+	_, err = server.Daasher.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken)
 	if err != nil {
 		fmt.Printf("failed to build DA clients: %v", err)
 		return

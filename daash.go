@@ -45,9 +45,9 @@ func NewDABuilder() *DABuilder {
 }
 
 // Initiates a new DAManager with clients from the sepcified DA layers
-func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string) error {
+func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string) (*DABuilder, error) {
 	if len(layers) == 0 {
-		return fmt.Errorf("no da layers provided")
+		return nil, fmt.Errorf("no da layers provided")
 	}
 
 	for _, layer := range layers {
@@ -61,7 +61,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
 			if err != nil {
 				log.Println("❌ Failed to initialise Avail DA client")
-				return fmt.Errorf(" Failed to create avail client: %v", err)
+				return nil, fmt.Errorf(" Failed to create avail client: %v", err)
 			}
 			log.Println("🟢 Avail DA client initialised")
 			d.Clients[Avail] = avail
@@ -69,13 +69,13 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 		case Celestia:
 			if celestiaAuthToken == "" {
 				fmt.Println("AUTH_TOKEN is not set")
-				return fmt.Errorf("celestia auth token is not set")
+				return nil, fmt.Errorf("celestia auth token is not set")
 			}
 			// We use a random pre-set hex string for namespace rn
 			namespace := "9cb73e106b03d1050a13"
 			celestia, err := celestiada.New(ctx, CelestiaClientUrl, celestiaAuthToken, namespace, -1)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			log.Println("🟢 Celestia DA client initialised")
 			d.Clients[Celestia] = celestia
@@ -83,7 +83,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 		case Eigen:
 			eigen, err := eigenda.New("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			d.Clients[Eigen] = eigen
 			log.Println("🟢 Eigen DA client initialised")
@@ -93,8 +93,8 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			log.Println("🟢 Mock DA client initialised")
 
 		default:
-			return fmt.Errorf("invalid da layer provided: %s", layer)
+			return nil, fmt.Errorf("invalid da layer provided: %s", layer)
 		}
 	}
-	return nil
+	return d, nil
 }

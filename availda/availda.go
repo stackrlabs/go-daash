@@ -207,9 +207,11 @@ out:
 	}
 
 	var dataProofResp DataProofRPCResponse
+	var extIndex int
 	for idx, e := range block.Block.Extrinsics {
 		// Look for our submitted extrinsic in the block
 		if ext.Signature.Signature.AsEcdsa.Hex() == e.Signature.Signature.AsEcdsa.Hex() {
+			extIndex = idx
 			resp, err := http.Post("https://goldberg.avail.tools/api", "application/json",
 				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
 			if err != nil {
@@ -235,15 +237,8 @@ out:
 		}
 	}
 	dataProof := dataProofResp.Result.DataProof
-
-	extBytes, err := json.Marshal(ext)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot marshal extrinsic", err)
-	}
-	// Strip string of any leading or following quotes
-	extBytes = []byte(strings.Trim(string(extBytes), "\""))
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := makeID(uint32(block.Block.Header.Number), string(extBytes))
+	blobID := makeID(uint32(block.Block.Header.Number), extIndex)
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -313,20 +308,21 @@ func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	var accountNextIndex AccountNextIndexRPCResponse
 	err = json.Unmarshal(data, &accountNextIndex)
 	if err != nil {
-		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot unmarshal account next index", err)
+		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot unmarshal account next index:%w Response: %s", err, data)
 	}
 
 	return types.NewUCompactFromUInt(uint64(accountNextIndex.Result)), nil
 }
 
 // makeID creates a unique ID to reference a blob on Avail
-func makeID(blockHeight uint32, extHash string) da.ID {
+func makeID(blockHeight uint32, extIndex int) da.ID {
 	// Serialise height and leaf index to binary
 	heightLen := 4
 	heightBytes := make([]byte, heightLen)
 	binary.LittleEndian.PutUint32(heightBytes, blockHeight)
-	idBytes := append(heightBytes, []byte(extHash)...)
-	return da.ID(idBytes)
+	extIndexBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(extIndexBytes, uint32(extIndex))
+	return da.ID(append(heightBytes, extIndexBytes...))
 }
 
 // SplitID returns the block height and leaf index from a unique ID
