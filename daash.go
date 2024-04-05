@@ -14,8 +14,6 @@ import (
 	"github.com/stackrlabs/go-daash/eigenda"
 )
 
-const CelestiaClientUrl = "http://localhost:26658"
-
 type DALayer string
 
 const (
@@ -45,7 +43,7 @@ func NewDABuilder() *DABuilder {
 }
 
 // Initiates a new DAManager with clients from the sepcified DA layers
-func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string) (*DABuilder, error) {
+func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*DABuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
 	}
@@ -73,7 +71,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			}
 			// We use a random pre-set hex string for namespace rn
 			namespace := "9cb73e106b03d1050a13"
-			celestia, err := celestiada.New(ctx, CelestiaClientUrl, celestiaAuthToken, namespace, -1)
+			celestia, err := celestiada.New(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
 			if err != nil {
 				return nil, err
 			}
