@@ -71,7 +71,7 @@ func New(configPath string) (*DAClient, error) {
 		return nil, fmt.Errorf("cannot get config", err)
 	}
 
-	a.API, err = gsrpc.NewSubstrateAPI(a.config.APIURL)
+	a.API, err = gsrpc.NewSubstrateAPI(a.config.WsRpcURL)
 	if err != nil {
 		// log.Error("cannot get api:%w", zap.Error(err))
 		return nil, fmt.Errorf("cannot get api", err)
@@ -212,7 +212,7 @@ out:
 		// Look for our submitted extrinsic in the block
 		if ext.Signature.Signature.AsEcdsa.Hex() == e.Signature.Signature.AsEcdsa.Hex() {
 			extIndex = idx
-			resp, err := http.Post("https://goldberg.avail.tools/api", "application/json",
+			resp, err := http.Post(a.config.HttpApiURL, "application/json",
 				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
 			if err != nil {
 				return nil, nil, fmt.Errorf("cannot post query request", err)
@@ -294,7 +294,7 @@ func (b BatchDAData) IsEmpty() bool {
 
 func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	// TODO: Add context to the request
-	resp, err := http.Post("https://goldberg.avail.tools/api", "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
+	resp, err := http.Post(a.config.HttpApiURL, "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
 	if err != nil {
 		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot post account next index request", err)
 	}
@@ -304,7 +304,6 @@ func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	if err != nil {
 		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot read body", err)
 	}
-
 	var accountNextIndex AccountNextIndexRPCResponse
 	err = json.Unmarshal(data, &accountNextIndex)
 	if err != nil {
@@ -362,7 +361,8 @@ func (a *DAClient) GetData(blockNumber uint64, extHash string) ([]byte, error) {
 
 type Config struct {
 	Seed               string `json:"seed"`
-	APIURL             string `json:"api_url"`
+	WsRpcURL           string `json:"wsRpcUrl"`
+	HttpApiURL         string `json:"httpApiUrl"`
 	AppID              int    `json:"app_id"`
 	DestinationDomain  int    `json:"destination_domain"`
 	DestinationAddress string `json:"destination_address"`
