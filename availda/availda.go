@@ -254,13 +254,13 @@ out:
 // Get returns Blob for each given ID, or an error.
 func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
-	blockHeight, extHash := SplitID(ids[0])
-	data, err := a.GetData(uint64(blockHeight), extHash)
+	ext, err := a.GetExtrinsic(ids[0])
 	if err != nil {
-		return nil, fmt.Errorf("cannot get data", err)
+		return nil, fmt.Errorf("cannot get extrinsic", err)
 	}
-	log.Println("📥 received data:%+v", zap.Any("data", data))
-	return []da.Blob{data}, nil
+	blobData := ext.Method.Args[2:]
+	log.Println("📥 received data:%+v", zap.Any("data", blobData))
+	return []da.Blob{blobData}, nil
 }
 
 // GetIDs returns IDs of all Blobs located in DA at given height.
@@ -325,38 +325,13 @@ func makeID(blockHeight uint32, extIndex int) da.ID {
 }
 
 // SplitID returns the block height and leaf index from a unique ID
-func SplitID(id da.ID) (uint32, string) {
+func SplitID(id da.ID) (uint32, uint32) {
 	heightLen := 4
 	heightBytes := id[:heightLen]
-	extHashBytes := id[heightLen:]
+	extIdxBytes := id[heightLen:]
 	blockHeight := binary.LittleEndian.Uint32(heightBytes)
-	return blockHeight, string(extHashBytes)
-}
-
-func (a *DAClient) GetData(blockNumber uint64, extHash string) ([]byte, error) {
-	blockHash, err := a.API.RPC.Chain.GetBlockHash(blockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get block hash", err)
-	}
-
-	block, err := a.API.RPC.Chain.GetBlock(blockHash)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get block", err)
-	}
-
-	var data []byte
-	for _, ext := range block.Block.Extrinsics {
-		extBytes, err := json.Marshal(ext)
-		if err != nil {
-			return nil, fmt.Errorf("cannot marshal extrinsic", err)
-		}
-		if string(extBytes) == extHash {
-			data = ext.Method.Args[2:]
-			break
-		}
-	}
-
-	return data, nil
+	extIdx := binary.LittleEndian.Uint32(extIdxBytes)
+	return blockHeight, extIdx
 }
 
 type Config struct {
@@ -387,4 +362,17 @@ func (c *Config) GetConfig(configFileName string) error {
 	}
 
 	return nil
+}
+
+func (a *DAClient) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
+	blockHeight, extIdx := SplitID(id)
+	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
+	if err != nil {
+		log.Fatalf("cannot get block hash:%w", err)
+	}
+	block, err := a.API.RPC.Chain.GetBlock(blockHash)
+	if err != nil {
+		log.Fatalf("cannot get block:%w", err)
+	}
+	return block.Block.Extrinsics[extIdx], nil
 }

@@ -2,8 +2,10 @@ package daash
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff"
@@ -95,4 +97,54 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 		}
 	}
 	return d, nil
+}
+
+func GetHumanReadableID(id da.ID, daLayer DALayer) any {
+	switch daLayer {
+	case Avail:
+		blockHeight, extIdx := availda.SplitID(id)
+		return struct {
+			BlockHeight uint32 `json:"blockHeight"`
+			ExtIdx      uint32 `json:"extIdx"`
+		}{
+			BlockHeight: blockHeight,
+			ExtIdx:      extIdx,
+		}
+	case Celestia:
+		blockHeight, commitment := celestiada.SplitID(id)
+		return struct {
+			BlockHeight uint64        `json:"blockHeight"`
+			Commitment  da.Commitment `json:"commitment"`
+		}{
+			BlockHeight: blockHeight,
+			Commitment:  commitment,
+		}
+	default:
+		return ""
+	}
+}
+
+func GetExplorerLink(client da.DA, ids []da.ID) (string, error) {
+	switch daClient := client.(type) {
+	case *celestiada.DAClient:
+		namespace := daClient.Namespace.String()
+		// remove 2 leading zero of namespace
+		namespace = namespace[2:]
+		return fmt.Sprintf("https://mocha-4.celenium.io/namespace/%s", namespace), nil
+	case *availda.DAClient:
+		ext, err := daClient.GetExtrinsic(ids[0])
+		if err != nil {
+			return "", err
+		}
+		extBytes, err := json.Marshal(ext)
+		if err != nil {
+			return "", err
+		}
+		// Strip string of any leading or following quotes
+		extString := strings.Trim(string(extBytes), "\"")
+		fmt.Println(extString)
+		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extString), nil
+	default:
+		return "", nil
+	}
 }

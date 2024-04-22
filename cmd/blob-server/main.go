@@ -15,8 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
-	"github.com/stackrlabs/go-daash/availda"
-	"github.com/stackrlabs/go-daash/celestiada"
 )
 
 // Constants
@@ -151,21 +149,6 @@ func generateJobID() string {
 	return randomHexString
 }
 
-func getSuccessLink(daClient da.DA, ids []da.ID) string {
-	switch daClient := daClient.(type) {
-	case *celestiada.DAClient:
-		namespace := daClient.Namespace.String()
-		// remove 2 leading zero of namespace
-		namespace = namespace[2:]
-		return fmt.Sprintf("https://mocha-4.celenium.io/namespace/%s", namespace)
-	case *availda.DAClient:
-		_, extHash := availda.SplitID(ids[0])
-		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extHash)
-	default:
-		return ""
-	}
-}
-
 func run(ctx context.Context, b *BlobServer, job Job) {
 	var jobStatus map[string]any
 	ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
@@ -175,7 +158,10 @@ func run(ctx context.Context, b *BlobServer, job Job) {
 			"error":  err,
 		}
 	} else {
-		successLink := getSuccessLink(b.Daasher.Clients[job.Layer], ids)
+		successLink, err := daash.GetExplorerLink(b.Daasher.Clients[job.Layer], ids)
+		if err != nil {
+			log.Fatalf("cannot get explorer link: %v", err)
+		}
 		jobStatus = gin.H{
 			"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
 			"ids":    ids,

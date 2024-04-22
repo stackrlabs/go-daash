@@ -64,7 +64,7 @@ func (c *DAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
 func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	var blobs []da.Blob
 	for _, id := range ids {
-		height, commitment := splitID(id)
+		height, commitment := SplitID(id)
 		blob, err := c.client.Blob.Get(ctx, height, c.Namespace, commitment)
 		if err != nil {
 			return nil, err
@@ -171,7 +171,7 @@ func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proo
 		proofs = append(proofs, proof)
 	}
 	for i, id := range ids {
-		height, commitment := splitID(id)
+		height, commitment := SplitID(id)
 		// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
 		//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
 		//    there is no way of gently handling errors here, but returned value is fine for us
@@ -193,7 +193,7 @@ func makeID(height uint64, commitment da.Commitment) da.ID {
 	return id
 }
 
-func splitID(id da.ID) (uint64, da.Commitment) {
+func SplitID(id da.ID) (uint64, da.Commitment) {
 	if len(id) <= heightLen {
 		return 0, nil
 	}
