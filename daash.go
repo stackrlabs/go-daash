@@ -120,7 +120,7 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			Commitment:  commitment,
 		}
 	default:
-		return ""
+		return struct{}{}
 	}
 }
 
