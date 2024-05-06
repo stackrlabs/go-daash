@@ -210,24 +210,35 @@ out:
 	var extIndex int
 	for idx, e := range block.Block.Extrinsics {
 		// Look for our submitted extrinsic in the block
-		if ext.Signature.Signature.AsEcdsa.Hex() == e.Signature.Signature.AsEcdsa.Hex() {
+		extBytes, err := json.Marshal(ext)
+		if err != nil {
+			continue
+		}
+		extBytes = []byte(strings.Trim(string(extBytes), "\""))
+
+		eBytes, err := json.Marshal(e)
+		if err != nil {
+			continue
+		}
+		eBytes = []byte(strings.Trim(string(eBytes), "\""))
+		if string(extBytes) == string(eBytes) {
 			extIndex = idx
 			resp, err := http.Post(a.config.HttpApiURL, "application/json",
 				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
 			if err != nil {
-				return nil, nil, fmt.Errorf("cannot post query request", err)
+				break
 			}
 			data, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return nil, nil, fmt.Errorf("cannot read body", err)
+				break
 			}
 			err = resp.Body.Close()
 			if err != nil {
-				return nil, nil, fmt.Errorf("cannot close body", err)
+				break
 			}
 			err = json.Unmarshal(data, &dataProofResp)
 			if err != nil {
-				return nil, nil, fmt.Errorf("cannot unmarshal data proof: %w", err)
+				break
 			}
 
 			if dataProofResp.Result.DataProof.Leaf == fmt.Sprintf("%#x", batchHash) {
