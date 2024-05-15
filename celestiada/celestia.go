@@ -30,7 +30,7 @@ type DAClient struct {
 }
 
 // Returns an intialised Celestia DA client
-func New(ctx context.Context, lightCLientRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*DAClient, error) {
+func New(ctx context.Context, lightClientRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*DAClient, error) {
 	nsBytes := make([]byte, 10)
 	_, err := hex.Decode(nsBytes, []byte(hexNamespace))
 	if err != nil {
@@ -41,7 +41,7 @@ func New(ctx context.Context, lightCLientRPCUrl string, authToken string, hexNam
 	if err != nil {
 		return nil, err
 	}
-	client, err := rpc.NewClient(ctx, lightCLientRPCUrl, authToken)
+	client, err := rpc.NewClient(ctx, lightClientRPCUrl, authToken)
 	if err != nil {
 		fmt.Printf("failed to create rpc client: %v", err)
 		return nil, err
