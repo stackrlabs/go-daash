@@ -2,6 +2,7 @@ package daash
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -111,12 +112,14 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			ExtIdx:      extIdx,
 		}
 	case Celestia:
-		blockHeight, commitment := celestiada.SplitID(id)
+		blockHeight, txHash, commitment := celestiada.SplitID(id)
 		return struct {
 			BlockHeight uint64        `json:"blockHeight"`
+			TxHash      string        `json:"txHash"`
 			Commitment  da.Commitment `json:"commitment"`
 		}{
 			BlockHeight: blockHeight,
+			TxHash:      hex.EncodeToString(txHash),
 			Commitment:  commitment,
 		}
 	default:
@@ -127,10 +130,8 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 func GetExplorerLink(client da.DA, ids []da.ID) (string, error) {
 	switch daClient := client.(type) {
 	case *celestiada.DAClient:
-		namespace := daClient.Namespace.String()
-		// remove 2 leading zero of namespace
-		namespace = namespace[2:]
-		return fmt.Sprintf("https://mocha-4.celenium.io/namespace/%s", namespace), nil
+		_, txHash, _ := celestiada.SplitID(ids[0])
+		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", hex.EncodeToString(txHash)), nil
 	case *availda.DAClient:
 		ext, err := daClient.GetExtrinsic(ids[0])
 		if err != nil {

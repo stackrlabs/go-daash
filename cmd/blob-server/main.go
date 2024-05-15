@@ -124,7 +124,7 @@ func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Pro
 	daProofs := make([]da.Proof, 1)
 	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
-		proofs, ids, err := DAClient.Submit(c, [][]byte{data}, -1)
+		ids, proofs, err := DAClient.Submit(c, [][]byte{data}, -1)
 		if err != nil {
 			fmt.Println("post data: ", err)
 			return fmt.Errorf("post data: %w", err)
@@ -136,7 +136,7 @@ func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Pro
 	if err != nil {
 		return nil, nil, fmt.Errorf("retry: %w", err)
 	}
-	return daProofs, daIDs, nil
+	return daIDs, daProofs, nil
 }
 
 func generateJobID() string {

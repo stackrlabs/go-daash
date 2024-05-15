@@ -64,7 +64,7 @@ func (c *DAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
 func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	var blobs []da.Blob
 	for _, id := range ids {
-		height, commitment := SplitID(id)
+		height, _, commitment := SplitID(id)
 		blob, err := c.client.Blob.Get(ctx, height, c.Namespace, commitment)
 		if err != nil {
 			return nil, err
@@ -85,7 +85,7 @@ func (c *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 		return nil, err
 	}
 	for _, b := range blobs {
-		ids = append(ids, makeID(height, b.Commitment))
+		ids = append(ids, makeID(height, b.Commitment, make([]byte, 32)))
 	}
 	return ids, nil
 }
@@ -115,17 +115,21 @@ func (c *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float
 		options.GasLimit = types.EstimateGas(blobSizes, appconsts.DefaultGasPerBlobByte, auth.DefaultTxSizeCostPerByte)
 		options.Fee = sdktypes.NewInt(int64(math.Ceil(gasPrice * float64(options.GasLimit)))).Int64()
 	}
-	height, err := c.client.Blob.Submit(ctx, blobs, options)
+	txResp, err := c.client.State.SubmitPayForBlob(ctx, sdktypes.NewInt(int64(options.Fee)), options.GasLimit, blobs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	log.Println("successfully submitted blobs", "height", height, "gas", options.GasLimit, "fee", options.Fee)
+	log.Println("successfully submitted blobs", "height", txResp.Height, "gas", options.GasLimit, "fee", options.Fee)
 	ids := make([]da.ID, len(daBlobs))
 	proofs := make([]da.Proof, len(daBlobs))
 	for i, commitment := range commitments {
-		ids[i] = makeID(height, commitment)
-		proof, err := c.client.Blob.GetProof(ctx, height, c.Namespace, commitment)
+		txHashBytes, err := hex.DecodeString(txResp.TxHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		ids[i] = makeID(uint64(txResp.Height), commitment, txHashBytes)
+		proof, err := c.client.Blob.GetProof(ctx, uint64(txResp.Height), c.Namespace, commitment)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -171,7 +175,7 @@ func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proo
 		proofs = append(proofs, proof)
 	}
 	for i, id := range ids {
-		height, commitment := SplitID(id)
+		height, _, commitment := SplitID(id)
 		// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
 		//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
 		//    there is no way of gently handling errors here, but returned value is fine for us
@@ -185,17 +189,23 @@ func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proo
 //
 // This is 8 as uint64 consist of 8 bytes.
 const heightLen = 8
+const txHashLen = 32
 
-func makeID(height uint64, commitment da.Commitment) da.ID {
-	id := make([]byte, heightLen+len(commitment))
+func makeID(height uint64, commitment da.Commitment, txHash []byte) da.ID {
+	id := make([]byte, heightLen+txHashLen+len(commitment))
 	binary.LittleEndian.PutUint64(id, height)
-	copy(id[heightLen:], commitment)
+	copy(id[heightLen:heightLen+txHashLen], txHash)
+	copy(id[heightLen+txHashLen:], commitment)
 	return id
 }
 
-func SplitID(id da.ID) (uint64, da.Commitment) {
+func SplitID(id da.ID) (uint64, []byte, da.Commitment) {
 	if len(id) <= heightLen {
-		return 0, nil
+		return 0, nil, nil
 	}
-	return binary.LittleEndian.Uint64(id[:heightLen]), id[heightLen:]
+	// Return only height and commitment if ID is smaller to keep it backward compatible
+	if len(id) <= heightLen+txHashLen {
+		return 0, nil, id[heightLen : heightLen+txHashLen]
+	}
+	return binary.LittleEndian.Uint64(id[:heightLen]), id[heightLen : heightLen+txHashLen], id[heightLen+txHashLen:]
 }
