@@ -1,6 +1,8 @@
 module github.com/stackrlabs/go-daash
 
-go 1.21.3
+go 1.21.5
+
+toolchain go1.21.10
 
 replace (
 	// Avail fork of go-substrate-rpc-client/v4
@@ -58,6 +60,7 @@ require (
 	github.com/celestiaorg/go-fraud v0.2.0 // indirect
 	github.com/celestiaorg/go-header v0.5.4 // indirect
 	github.com/celestiaorg/go-libp2p-messenger v0.2.0 // indirect
+	github.com/celestiaorg/go-square v1.0.1 // indirect
 	github.com/celestiaorg/merkletree v0.0.0-20210714075610-a84dc3ddbbe4 // indirect
 	github.com/celestiaorg/quantum-gravity-bridge/v2 v2.1.2 // indirect
 	github.com/celestiaorg/rsmt2d v0.11.0 // indirect
