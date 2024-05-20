@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	shareloader "blobstreamx-example/contracts/ShareLoader.sol"
-
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	bv "github.com/stackrlabs/go-daash/celestiada/verify/bindings/blobstreamverifier"
 	"github.com/tendermint/tendermint/rpc/client/http"
 )
 
@@ -19,11 +19,11 @@ type SharePointer struct {
 // GetShareProof returns the share proof for the given share pointer.
 // Ready to be used with the DAVerifier library.
 // RE: https://docs.celestia.org/developers/blobstream-proof-queries#example-rollup-that-uses-the-daverifier
-func GetShareProof(eth *ethclient.Client, trpc *http.HTTP, sp *SharePointer) (*shareloader.SharesProof, [32]byte, error) {
+func GetShareProof(eth *ethclient.Client, trpc *http.HTTP, sp *SharePointer, blobstreamContract common.Address) (*bv.SharesProof, [32]byte, error) {
 	ctx := context.Background()
 
 	// 1. Get the data commitment
-	dataCommitment, err := GetDataCommitment(eth, sp.Height, 10_000_000)
+	dataCommitment, err := GetDataCommitment(eth, sp.Height, 10_000_000, blobstreamContract)
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to get data commitment: %w", err)
 	}
@@ -51,7 +51,7 @@ func GetShareProof(eth *ethclient.Client, trpc *http.HTTP, sp *SharePointer) (*s
 
 	blockDataRoot := [32]byte(blockRes.Block.DataHash)
 
-	return &shareloader.SharesProof{
+	return &bv.SharesProof{
 		Data:             shareProof.Data,
 		ShareProofs:      toNamespaceMerkleMultiProofs(shareProof.ShareProofs),
 		Namespace:        *namespace(shareProof.NamespaceID, uint8(shareProof.NamespaceVersion)),

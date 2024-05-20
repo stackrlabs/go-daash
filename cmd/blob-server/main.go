@@ -9,17 +9,23 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/joho/godotenv"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
+	verify "github.com/stackrlabs/go-daash/celestiada/verify"
 )
 
 // Constants
 const (
-	EigenDaRpcUrl = "disperser-goerli.eigenda.xyz:443"
+	EigenDaRpcUrl      = "disperser-goerli.eigenda.xyz:443"
+	ethEndpoint        = "https://virtual.sepolia.rpc.tenderly.co/0cc482a9-0555-4cd8-b136-4f61ccfc71ee"
+	trpcEndpoint       = "https://celestia-mocha-rpc.publicnode.com:443"
+	shareloaderAddress = "0x1Bf80E9b8d21ddCCE11b221E1a23781FEb58EB19"
+	blobstreamxAddress = "0xf0c6429ebab2e7dc6e05dafb61128be21f13cb1e"
 )
 
 type Job struct {
@@ -113,6 +119,41 @@ func main() {
 			return
 		}
 		c.JSON(http.StatusOK, job.Status)
+	})
+
+	router.GET("/:daName/verify/:txHash", func(c *gin.Context) {
+		daName := c.Param("daName")
+		daLayer := daash.DALayer(daName)
+		if daLayer != daash.Celestia {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("DA %s not found", daName),
+			})
+			return
+		}
+		txHash := c.Param("txHash")
+		verifier, err := verify.NewDAVerifier(
+			ethEndpoint,
+			trpcEndpoint,
+			common.HexToAddress(shareloaderAddress),
+			common.HexToAddress(blobstreamxAddress),
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to create verifier: %v", err),
+			})
+			return
+		}
+		success, err := verifier.VerifyDataAvailable(txHash)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to verify data: %v", err),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data verified onchain!",
+		})
 	})
 
 	go server.runJobPool()
