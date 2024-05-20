@@ -76,5 +76,6 @@ cp .env.example .env
 
 ## Built with
 - `go-da` and `celestia-da` libraries from [Rollkit](https://github.com/rollkit/go-da)
+- `blobstreamx-example` repo from [CryptoKass](https://github.com/CryptoKass/blobstreamx-example)
 
 
