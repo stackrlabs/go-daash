@@ -21,11 +21,11 @@ import (
 
 // Constants
 const (
-	EigenDaRpcUrl      = "disperser-goerli.eigenda.xyz:443"
-	ethEndpoint        = "https://virtual.sepolia.rpc.tenderly.co/0cc482a9-0555-4cd8-b136-4f61ccfc71ee"
-	trpcEndpoint       = "https://celestia-mocha-rpc.publicnode.com:443"
-	shareloaderAddress = "0x1Bf80E9b8d21ddCCE11b221E1a23781FEb58EB19"
-	blobstreamxAddress = "0xf0c6429ebab2e7dc6e05dafb61128be21f13cb1e"
+	EigenDaRpcUrl             = "disperser-goerli.eigenda.xyz:443"
+	ethEndpoint               = "https://sepolia.drpc.org"
+	trpcEndpoint              = "https://celestia-mocha-rpc.publicnode.com:443"
+	blobstreamverifierAddress = "0x1Bf80E9b8d21ddCCE11b221E1a23781FEb58EB19" // Contract deployed here: https://sepolia.etherscan.io/address/0x1bf80e9b8d21ddcce11b221e1a23781feb58eb19
+	blobstreamxAddress        = "0xf0c6429ebab2e7dc6e05dafb61128be21f13cb1e"
 )
 
 type Job struct {
@@ -134,7 +134,7 @@ func main() {
 		verifier, err := verify.NewDAVerifier(
 			ethEndpoint,
 			trpcEndpoint,
-			common.HexToAddress(shareloaderAddress),
+			common.HexToAddress(blobstreamverifierAddress),
 			common.HexToAddress(blobstreamxAddress),
 		)
 		if err != nil {
