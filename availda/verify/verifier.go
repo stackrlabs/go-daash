@@ -7,16 +7,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stackrlabs/go-daash/availda"
-	"github.com/stackrlabs/go-daash/availda/verify/bindings/availbridge"
+	"github.com/stackrlabs/go-daash/availda/verify/bindings/vectorverifier"
 )
 
 type DAVerifier struct {
-	daClient       *availda.DAClient
-	ethClient      *ethclient.Client
-	bridgeContract common.Address
+	daClient         *availda.DAClient
+	ethClient        *ethclient.Client
+	bridgeContract   common.Address
+	verifierContract common.Address
 }
 
-func NewDAVerifier(configPath string, ethEndpoint string, bridgeContract string) (*DAVerifier, error) {
+func NewDAVerifier(configPath string, ethEndpoint string, bridgeContract string, verifierContract string) (*DAVerifier, error) {
 	client, err := availda.New(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DAClient: %w", err)
@@ -26,9 +27,10 @@ func NewDAVerifier(configPath string, ethEndpoint string, bridgeContract string)
 		return nil, fmt.Errorf("failed to create eth client: %w", err)
 	}
 	return &DAVerifier{
-		daClient:       client,
-		ethClient:      ethClient,
-		bridgeContract: common.HexToAddress(bridgeContract),
+		daClient:         client,
+		ethClient:        ethClient,
+		bridgeContract:   common.HexToAddress(bridgeContract),
+		verifierContract: common.HexToAddress(verifierContract),
 	}, nil
 }
 
@@ -37,11 +39,11 @@ func (d *DAVerifier) VerifyDataAvailable(blockHeight uint64, extIndex uint64) (b
 	if err != nil {
 		return false, fmt.Errorf("failed to get proof: %w", err)
 	}
-	bridge, err := availbridge.NewAvailbridge(d.bridgeContract, d.ethClient)
+	verifier, err := vectorverifier.NewVectorverifier(d.verifierContract, d.ethClient)
 	if err != nil {
-		return false, fmt.Errorf("failed to create availbridge: %w", err)
+		return false, fmt.Errorf("failed to create vector verifier: %w", err)
 	}
-	success, err := bridge.VerifyBlobLeaf(nil, *proof)
+	success, err := verifier.VerifyDataAvailability(nil, d.bridgeContract, proof.Leaf, *proof)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify blob leaf: %w", err)
 	}

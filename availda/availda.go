@@ -21,7 +21,7 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rollkit/go-da"
-	"github.com/stackrlabs/go-daash/availda/verify/bindings/availbridge"
+	"github.com/stackrlabs/go-daash/availda/verify/bindings/vectorverifier"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
@@ -296,7 +296,7 @@ type SuccintAPIResponse struct {
 }
 
 // GetProofs returns the proofs for the given IDs
-func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (*availbridge.IAvailBridgeMerkleProofInput, error) {
+func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
 	// TODO: Need to implement this
 	var dataProofResp DataProofRPCResponse
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
@@ -363,7 +363,7 @@ func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int)
 		leafProof = append(leafProof, hexBytes)
 	}
 
-	return &availbridge.IAvailBridgeMerkleProofInput{
+	return &vectorverifier.IAvailBridgeMerkleProofInput{
 		DataRootProof: dataRootProof,
 		LeafProof:     leafProof,
 		RangeHash:     common.HexToHash(succintAPIResponse.Data.RangeHash),
