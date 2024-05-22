@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"os"
 	"reflect"
@@ -18,7 +19,9 @@ import (
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/availda/verify/bindings/availbridge"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
@@ -27,28 +30,22 @@ type AccountNextIndexRPCResponse struct {
 	Result uint `json:"result"`
 }
 type DataProofRPCResponse struct {
+	ID      int64  `json:"id"`
 	Jsonrpc string `json:"jsonrpc"`
 	Result  struct {
-		DataProof struct {
-			DataRoot       string   `json:"dataRoot"`
-			BlobRoot       string   `json:"blobRoot"`
-			BridgeRoot     string   `json:"bridgeRoot"`
-			Proof          []string `json:"proof"`
-			NumberOfLeaves int      `json:"numberOfLeaves"`
-			LeafIndex      int      `json:"leafIndex"`
-			Leaf           string   `json:"leaf"`
-		} `json:"dataProof"`
+		DataProof `json:"dataProof"`
 	} `json:"result"`
-	ID int `json:"id"`
 }
 type DataProof struct {
-	Root           string   `json:"dataRoot"`
-	BlobRoot       string   `json:"blobRoot"`
-	BridgeRoot     string   `json:"bridgeRoot"`
-	Proof          []string `json:"proof"`
-	NumberOfLeaves uint32   `json:"numberOfLeaves"`
-	LeafIndex      uint32   `json:"leafIndex"`
 	Leaf           string   `json:"leaf"`
+	LeafIndex      int64    `json:"leafIndex"`
+	NumberOfLeaves int64    `json:"numberOfLeaves"`
+	Proof          []string `json:"proof"`
+	Roots          struct {
+		BlobRoot   string `json:"blobRoot"`
+		BridgeRoot string `json:"bridgeRoot"`
+		DataRoot   string `json:"dataRoot"`
+	} `json:"roots"`
 }
 
 type DAClient struct {
@@ -284,6 +281,98 @@ func (a *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 func (a *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
 	// TODO: Need to implement this
 	return nil, nil
+}
+
+type SuccintAPIResponse struct {
+	Data struct {
+		BlockHash      string   `json:"blockHash"`
+		DataCommitment string   `json:"dataCommitment"`
+		DataRoot       string   `json:"dataRoot"`
+		Index          int64    `json:"index"`
+		MerkleBranch   []string `json:"merkleBranch"`
+		RangeHash      string   `json:"rangeHash"`
+		TotalLeaves    int64    `json:"totalLeaves"`
+	} `json:"data"`
+}
+
+// GetProofs returns the proofs for the given IDs
+func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (*availbridge.IAvailBridgeMerkleProofInput, error) {
+	// TODO: Need to implement this
+	var dataProofResp DataProofRPCResponse
+	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
+	if err != nil {
+		return nil, fmt.Errorf("cannot get block hash:%w", err)
+	}
+	resp, err := http.Post(a.config.HttpApiURL, "application/json",
+		strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", extIdx, blockHash)))
+
+	if err != nil {
+		return nil, fmt.Errorf("cannot get data proof:%w", err)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read data:%w", err)
+	}
+	err = resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("cannot close body:%w", err)
+	}
+	fmt.Println("raw proof data", string(data))
+	err = json.Unmarshal(data, &dataProofResp)
+	if err != nil {
+		return nil, fmt.Errorf("cannot unmarshal data:%w", err)
+	}
+	fmt.Println("dataProofResp", dataProofResp)
+
+	resp, err = http.Get(
+		fmt.Sprintf("%s?chainName=%s&contractChainId=%s&contractAddress=%s&blockHash=%s",
+			"https://beaconapi.succinct.xyz/api/integrations/vectorx",
+			"turing",
+			"11155111",
+			"0xe542dB219a7e2b29C7AEaEAce242c9a2Cd528F96",
+			blockHash.Hex(),
+		))
+	if err != nil {
+		return nil, fmt.Errorf("cannot get succint proof:%w", err)
+	}
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read data:%w", err)
+	}
+	err = resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("cannot close body:%w", err)
+	}
+	fmt.Println("raw succint response", string(data))
+	var succintAPIResponse SuccintAPIResponse
+	err = json.Unmarshal(data, &succintAPIResponse)
+	if err != nil {
+		return nil, fmt.Errorf("cannot unmarshal data:%w", err)
+	}
+	fmt.Println("Data proof:", dataProofResp)
+	fmt.Println("Succint proof:", succintAPIResponse)
+
+	var dataRootProof [][32]byte
+	for _, node := range succintAPIResponse.Data.MerkleBranch {
+		hexBytes := common.HexToHash(node)
+		dataRootProof = append(dataRootProof, hexBytes)
+	}
+	var leafProof [][32]byte
+	for _, node := range dataProofResp.Result.DataProof.Proof {
+		hexBytes := common.HexToHash(node)
+		leafProof = append(leafProof, hexBytes)
+	}
+
+	return &availbridge.IAvailBridgeMerkleProofInput{
+		DataRootProof: dataRootProof,
+		LeafProof:     leafProof,
+		RangeHash:     common.HexToHash(succintAPIResponse.Data.RangeHash),
+		DataRootIndex: big.NewInt(succintAPIResponse.Data.Index),
+		BlobRoot:      common.HexToHash(dataProofResp.Result.DataProof.Roots.BlobRoot),
+		BridgeRoot:    common.HexToHash(dataProofResp.Result.DataProof.Roots.BridgeRoot),
+		Leaf:          common.HexToHash(dataProofResp.Result.DataProof.Leaf),
+		LeafIndex:     big.NewInt(dataProofResp.Result.DataProof.LeafIndex),
+	}, nil
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.

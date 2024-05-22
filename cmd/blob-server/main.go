@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
+	availVerifier "github.com/stackrlabs/go-daash/availda/verify"
 	verify "github.com/stackrlabs/go-daash/celestiada/verify"
 )
 
@@ -121,7 +123,7 @@ func main() {
 		c.JSON(http.StatusOK, job.Status)
 	})
 
-	router.GET("/:daName/verify/:txHash", func(c *gin.Context) {
+	router.GET("/celestia/verify/:txHash", func(c *gin.Context) {
 		daName := c.Param("daName")
 		daLayer := daash.DALayer(daName)
 		if daLayer != daash.Celestia {
@@ -146,6 +148,42 @@ func main() {
 		success, err := verifier.VerifyDataAvailable(txHash)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to verify data: %v", err),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data verified onchain!",
+		})
+	})
+
+	router.GET("/avail/verify/:blockHeight/:extIndex", func(c *gin.Context) {
+		blockHeight := c.Param("blockHeight")
+		extIndex := c.Param("extIndex")
+		blockHeightUint, err := strconv.ParseUint(blockHeight, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("blockHeight %s is not a valid uint64", blockHeight),
+			})
+			return
+		}
+		extIndexUint, err := strconv.ParseUint(extIndex, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("extIndex %s is not a valid uint64", extIndex),
+			})
+			return
+		}
+		verifier, err := availVerifier.NewDAVerifier(
+			"./avail-config.json",
+			ethEndpoint,
+			"0x967F7DdC4ec508462231849AE81eeaa68Ad01389", // Avail bridge deployed on Sepolia
+		)
+		success, err := verifier.VerifyDataAvailable(blockHeightUint, extIndexUint)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
 				"message": fmt.Sprintf("failed to verify data: %v", err),
 			})
 			return
