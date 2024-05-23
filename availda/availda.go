@@ -246,7 +246,7 @@ out:
 	}
 	dataProof := dataProofResp.Result.DataProof
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := makeID(uint32(block.Block.Header.Number), extIndex)
+	blobID := MakeID(uint32(block.Block.Header.Number), extIndex)
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -414,7 +414,7 @@ func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 }
 
 // makeID creates a unique ID to reference a blob on Avail
-func makeID(blockHeight uint32, extIndex int) da.ID {
+func MakeID(blockHeight uint32, extIndex int) da.ID {
 	// Serialise height and leaf index to binary
 	heightLen := 4
 	heightBytes := make([]byte, heightLen)

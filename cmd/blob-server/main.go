@@ -179,9 +179,16 @@ func main() {
 			"./avail-config.json",
 			ethEndpoint,
 			"0x967F7DdC4ec508462231849AE81eeaa68Ad01389", // Avail bridge deployed on Sepolia
+			"0x6B26173C8afF316919542df8dA5A57888e398ee1", // Custom Vector verifier contract deployed on Sepolia
 		)
-		success, err := verifier.VerifyDataAvailable(blockHeightUint, extIndexUint)
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to create verifier: %v", err),
+			})
+			return
+		}
+		success, err := verifier.VerifyDataIncluded(blockHeightUint, extIndexUint)
+		if !success || err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": fmt.Sprintf("failed to verify data: %v", err),
