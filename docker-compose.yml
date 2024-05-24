@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  celestia-light-client-init:
+    image: ghcr.io/celestiaorg/celestia-node:v0.12.4
+    user: "10001:10001"
+    environment:
+      NODE_TYPE: ${NODE_TYPE} # Ensure these environment variables are set in your shell or a .env file
+      P2P_NETWORK: ${NETWORK}
+    volumes:
+      - ${NODE_STORE_DIR}:/home/celestia
+    command: celestia ${NODE_TYPE} init --p2p.network ${NETWORK}
+    restart: on-failure
+
+  celestia-light-client:
+    image: ghcr.io/celestiaorg/celestia-node:v0.12.4
+    user: "10001:10001"
+    networks: [go-daash]
+    environment:
+      NODE_TYPE: ${NODE_TYPE}
+      P2P_NETWORK: ${NETWORK}
+    volumes:
+      - ${NODE_STORE_DIR}:/home/celestia
+    ports:
+      - "26658:26658"
+    command: celestia ${NODE_TYPE} start --core.ip ${CELESTIA_RPC_URL} --p2p.network ${NETWORK} --rpc.addr 0.0.0.0
+    depends_on:
+      - celestia-light-client-init
+    restart: always
+
+networks:
+  go-daash:

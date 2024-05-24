@@ -2,7 +2,7 @@ package da
 
 import "context"
 
-// DA defines very generic interface for interaction with Data Availability layers.
+// DA defines a Client interface to interact with Data Availability layers.
 type Client interface {
 	// MaxBlobSize returns the max blob size
 	MaxBlobSize(ctx context.Context) (uint64, error)

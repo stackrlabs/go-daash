@@ -143,6 +143,7 @@ func postToDA(c context.Context, data []byte, DAClient da.Client) ([]da.ID, []da
 }
 
 func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
+	var success bool
 	switch layer {
 	case daash.Celestia:
 		txHash, ok := c.GetQuery("txHash")
@@ -164,17 +165,13 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.VerifyDataAvailable(txHash)
+		success, err = verifier.VerifyDataAvailable(txHash)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("failed to verify data: %v", err),
 			})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data verified onchain!",
-		})
 	case daash.Avail:
 		blockHeight, ok := c.GetQuery("blockHeight")
 		if !ok {
@@ -218,7 +215,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.IsDataIncluded(availda.ID{Height: blockHeightUint, ExtIndex: uint32(extIndexUint)})
+		success, err = verifier.IsDataIncluded(availda.ID{Height: blockHeightUint, ExtIndex: uint32(extIndexUint)})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
@@ -226,21 +223,24 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		if !success {
-			c.JSON(http.StatusOK, gin.H{
-				"success": success,
-				"message": "data availability cannot be verified onchain!",
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data availability succesfully verified onchain!",
-		})
+
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": fmt.Sprintf("DA %s not supported yet", layer),
 		})
 		return
 	}
+
+	if !success {
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data availability cannot be verified onchain!",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": success,
+		"message": "data availability succesfully verified onchain!",
+	})
+
 }

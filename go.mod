@@ -25,7 +25,6 @@ require (
 	github.com/ethereum/go-ethereum v1.13.10
 	github.com/gin-gonic/gin v1.9.1
 	github.com/joho/godotenv v1.5.1
-	github.com/rollkit/go-da v0.2.0
 	github.com/tendermint/tendermint v0.34.29
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.21.0
