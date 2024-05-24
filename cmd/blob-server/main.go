@@ -11,11 +11,11 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
-	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
 	"github.com/stackrlabs/go-daash/availda"
 	availVerify "github.com/stackrlabs/go-daash/availda/verify"
 	celestiaVerify "github.com/stackrlabs/go-daash/celestiada/verify"
+	"github.com/stackrlabs/go-daash/da"
 )
 
 type BlobServer struct {
@@ -123,7 +123,7 @@ func main() {
 	router.Run()
 }
 
-func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
+func postToDA(c context.Context, data []byte, DAClient da.Client) ([]da.ID, []da.Proof, error) {
 	daProofs := make([]da.Proof, 1)
 	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
@@ -205,12 +205,12 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			return
 		}
 		verifier, err := availVerify.NewVerifier(
-			daasher.Clients[daash.Avail].(*availda.DAClient),
+			daasher.Clients[daash.Avail].(*availda.Client),
 			chainMetadata["sepolia"]["rpcUrl"],
 			chainMetadata["sepolia"]["availBridgeAddress"],
 			chainMetadata["sepolia"]["vectorVerifierAddress"],
 			chainMetadata["sepolia"]["vectorXAddress"],
-			daasher.Clients[daash.Avail].(*availda.DAClient).Config.Network,
+			daasher.Clients[daash.Avail].(*availda.Client).Config.Network,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -218,7 +218,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.IsDataIncluded(blockHeightUint, extIndexUint)
+		success, err := verifier.IsDataIncluded(availda.ID{Height: blockHeightUint, ExtIndex: uint32(extIndexUint)})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,

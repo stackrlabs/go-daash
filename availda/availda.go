@@ -13,12 +13,10 @@ import (
 
 	"log"
 
-	"encoding/binary"
-
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/da"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
@@ -45,7 +43,7 @@ type DataProof struct {
 	} `json:"roots"`
 }
 
-type DAClient struct {
+type Client struct {
 	Config             Config
 	API                *gsrpc.SubstrateAPI
 	Meta               *types.Metadata
@@ -58,8 +56,8 @@ type DAClient struct {
 }
 
 // Returns a newly initalised Avail DA client
-func New(configPath string) (*DAClient, error) {
-	a := DAClient{}
+func NewClient(configPath string) (*Client, error) {
+	a := Client{}
 	err := a.Config.GetConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get config", err)
@@ -112,14 +110,14 @@ func New(configPath string) (*DAClient, error) {
 }
 
 // MaxBlobSize returns the max blob size
-func (c *DAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
+func (c *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 	var maxBlobSize uint64 = 64 * 64 * 500
 	return maxBlobSize, nil
 }
 
 // Submit a list of blobs to Avail DA
 // Currently, we submit to a trusted RPC Avail node. In the future, we will submit via an Avail light client.
-func (a *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
+func (a *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	// TODO: Add support for multiple blobs
 	daBlob := daBlobs[0]
 	log.Println("data", zap.Any("data", daBlob))
@@ -243,7 +241,7 @@ out:
 	}
 	dataProof := dataProofResp.Result.DataProof
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := MakeID(uint32(block.Block.Header.Number), extIndex)
+	blobID := ID{Height: uint64(block.Block.Header.Number), ExtIndex: uint32(extIndex)}
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -257,7 +255,7 @@ out:
 }
 
 // Get returns Blob for each given ID, or an error.
-func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+func (a *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
 	ext, err := a.GetExtrinsic(ids[0])
 	if err != nil {
@@ -269,19 +267,19 @@ func (a *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 }
 
 // GetIDs returns IDs of all Blobs located in DA at given height.
-func (a *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
+func (a *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
 
 // Commit creates a Commitment for each given Blob.
-func (a *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
+func (a *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
 
 // GetProofs returns the proofs for the given IDs
-func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (DataProofRPCResponse, error) {
+func (a *Client) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (DataProofRPCResponse, error) {
 	var dataProofResp DataProofRPCResponse
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
 	if err != nil {
@@ -311,7 +309,7 @@ func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int)
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
+func (c *Client) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
 	// TODO: Need to implement this
 	return nil, nil
 }
@@ -327,7 +325,7 @@ func (b BatchDAData) IsEmpty() bool {
 	return reflect.DeepEqual(b, BatchDAData{})
 }
 
-func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
+func (a *Client) GetAccountNextIndex() (types.UCompact, error) {
 	// TODO: Add context to the request
 	resp, err := http.Post(a.Config.HttpApiURL, "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
 	if err != nil {
@@ -348,25 +346,9 @@ func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	return types.NewUCompactFromUInt(uint64(accountNextIndex.Result)), nil
 }
 
-// makeID creates a unique ID to reference a blob on Avail
-func MakeID(blockHeight uint32, extIndex int) da.ID {
-	// Serialise height and leaf index to binary
-	heightLen := 4
-	heightBytes := make([]byte, heightLen)
-	binary.LittleEndian.PutUint32(heightBytes, blockHeight)
-	extIndexBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(extIndexBytes, uint32(extIndex))
-	return da.ID(append(heightBytes, extIndexBytes...))
-}
-
-// SplitID returns the block height and leaf index from a unique ID
-func SplitID(id da.ID) (uint32, uint32) {
-	heightLen := 4
-	heightBytes := id[:heightLen]
-	extIdxBytes := id[heightLen:]
-	blockHeight := binary.LittleEndian.Uint32(heightBytes)
-	extIdx := binary.LittleEndian.Uint32(extIdxBytes)
-	return blockHeight, extIdx
+type ID struct {
+	Height   uint64 `json:"blockHeight"`
+	ExtIndex uint32 `json:"extIdx"`
 }
 
 type Config struct {
@@ -400,9 +382,12 @@ func (c *Config) GetConfig(configFileName string) error {
 	return nil
 }
 
-func (a *DAClient) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
-	blockHeight, extIdx := SplitID(id)
-	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
+func (a *Client) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
+	availID, ok := id.(ID)
+	if !ok {
+		return types.Extrinsic{}, fmt.Errorf("invalid ID")
+	}
+	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(availID.Height))
 	if err != nil {
 		log.Fatalf("cannot get block hash:%w", err)
 	}
@@ -410,5 +395,5 @@ func (a *DAClient) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
 	if err != nil {
 		log.Fatalf("cannot get block:%w", err)
 	}
-	return block.Block.Extrinsics[extIdx], nil
+	return block.Block.Extrinsics[availID.ExtIndex], nil
 }

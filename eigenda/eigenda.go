@@ -3,13 +3,12 @@ package eigenda
 import (
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
 
-	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/da"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -65,15 +64,21 @@ func (e *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to disperse blob: %v", err)
 	}
-	blobID := e.makeID(blobInfo.BlobVerificationProof.BlobIndex, blobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash)
+	blobID := ID{
+		BlobIndex:       blobInfo.BlobVerificationProof.BlobIndex,
+		BatchHeaderHash: blobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
+	}
 	return []da.ID{blobID}, []da.Proof{blobInfo.BlobVerificationProof.InclusionProof}, nil
 }
 
 func (e *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
-	blobIndex, batchHeaderHash := e.splitID(ids[0])
+	blobID, ok := ids[0].(ID)
+	if !ok {
+		return nil, fmt.Errorf("invalid ID type")
+	}
 	resp, err := e.disperserClient.RetrieveBlob(ctx, &RetrieveBlobRequest{
-		BlobIndex:       blobIndex,
-		BatchHeaderHash: batchHeaderHash,
+		BlobIndex:       blobID.BlobIndex,
+		BatchHeaderHash: blobID.BatchHeaderHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve blob: %v", err)
@@ -93,15 +98,9 @@ func (e *Client) Validate(ctx context.Context, ids []da.ID, proofs []da.Proof) (
 	return nil, nil
 }
 
-func (e *Client) makeID(blobIndex uint32, batchHeaderHash []byte) da.ID {
-	idBytes := make([]byte, 4+len(batchHeaderHash))
-	binary.BigEndian.PutUint32(idBytes[:4], blobIndex)
-	copy(idBytes[4:], batchHeaderHash)
-	return idBytes
-}
-
-func (e *Client) splitID(id da.ID) (uint32, []byte) {
-	return binary.BigEndian.Uint32(id[:4]), id[4:]
+type ID struct {
+	BlobIndex       uint32
+	BatchHeaderHash []byte
 }
 
 func (e *Client) disperseBlob(ctx context.Context, txData []byte) (*BlobInfo, error) {

@@ -2,8 +2,8 @@ package celestiada
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -18,11 +18,11 @@ import (
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	auth "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	"github.com/rollkit/go-da"
+	"github.com/stackrlabs/go-daash/da"
 )
 
-// CelestiaDA implements the celestia backend for the DA interface
-type DAClient struct {
+// Client to interact with Celestia DA
+type Client struct {
 	client    *rpc.Client
 	Namespace share.Namespace
 	gasPrice  float64
@@ -30,7 +30,7 @@ type DAClient struct {
 }
 
 // Returns an intialised Celestia DA client
-func New(ctx context.Context, lightClientRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*DAClient, error) {
+func NewClient(ctx context.Context, lightClientRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*Client, error) {
 	nsBytes := make([]byte, 10)
 	_, err := hex.Decode(nsBytes, []byte(hexNamespace))
 	if err != nil {
@@ -46,7 +46,7 @@ func New(ctx context.Context, lightClientRPCUrl string, authToken string, hexNam
 		fmt.Printf("failed to create rpc client: %v", err)
 		return nil, err
 	}
-	return &DAClient{
+	return &Client{
 		client:    client,
 		Namespace: namespace,
 		gasPrice:  gasPrice,
@@ -55,17 +55,20 @@ func New(ctx context.Context, lightClientRPCUrl string, authToken string, hexNam
 }
 
 // MaxBlobSize returns the max blob size
-func (c *DAClient) MaxBlobSize(ctx context.Context) (uint64, error) {
+func (c *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 	// TODO: pass-through query to node, app
 	return appconsts.DefaultMaxBytes, nil
 }
 
 // Get returns Blob for each given ID, or an error.
-func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+func (c *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	var blobs []da.Blob
 	for _, id := range ids {
-		height, _, commitment := SplitID(id)
-		blob, err := c.client.Blob.Get(ctx, height, c.Namespace, commitment)
+		id, ok := id.(ID)
+		if !ok {
+			return nil, errors.New("invalid ID")
+		}
+		blob, err := c.client.Blob.Get(ctx, id.Height, c.Namespace, id.Commitment)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +78,7 @@ func (c *DAClient) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 }
 
 // GetIDs returns IDs of all Blobs located in DA at given height.
-func (c *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
+func (c *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 	var ids []da.ID
 	blobs, err := c.client.Blob.GetAll(ctx, height, []share.Namespace{c.Namespace})
 	if err != nil {
@@ -85,19 +88,20 @@ func (c *DAClient) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
 		return nil, err
 	}
 	for _, b := range blobs {
-		ids = append(ids, makeID(height, b.Commitment, make([]byte, 32)))
+		// TODO: get txHash
+		ids = append(ids, ID{Height: height, Commitment: b.Commitment, TxHash: make([]byte, 32)})
 	}
 	return ids, nil
 }
 
 // Commit creates a Commitment for each given Blob.
-func (c *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
+func (c *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
 	_, commitments, err := c.blobsAndCommitments(daBlobs)
 	return commitments, err
 }
 
 // Submit submits the Blobs to Data Availability layer.
-func (c *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
+func (c *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	blobs, commitments, err := c.blobsAndCommitments(daBlobs)
 	if err != nil {
 		return nil, nil, err
@@ -128,7 +132,7 @@ func (c *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float
 		if err != nil {
 			return nil, nil, err
 		}
-		ids[i] = makeID(uint64(txResp.Height), commitment, txHashBytes)
+		ids[i] = ID{Height: uint64(txResp.Height), Commitment: commitment, TxHash: txHashBytes}
 		proof, err := c.client.Blob.GetProof(ctx, uint64(txResp.Height), c.Namespace, commitment)
 		if err != nil {
 			return nil, nil, err
@@ -143,7 +147,7 @@ func (c *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float
 }
 
 // blobsAndCommitments converts []da.Blob to []*blob.Blob and generates corresponding []da.Commitment
-func (c *DAClient) blobsAndCommitments(daBlobs []da.Blob) ([]*blob.Blob, []da.Commitment, error) {
+func (c *Client) blobsAndCommitments(daBlobs []da.Blob) ([]*blob.Blob, []da.Commitment, error) {
 	var blobs []*blob.Blob
 	var commitments []da.Commitment
 	for _, daBlob := range daBlobs {
@@ -163,7 +167,7 @@ func (c *DAClient) blobsAndCommitments(daBlobs []da.Blob) ([]*blob.Blob, []da.Co
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
+func (c *Client) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
 	var included []bool
 	var proofs []*blob.Proof
 	for _, daProof := range daProofs {
@@ -175,37 +179,21 @@ func (c *DAClient) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proo
 		proofs = append(proofs, proof)
 	}
 	for i, id := range ids {
-		height, _, commitment := SplitID(id)
+		id, ok := id.(ID)
+		if !ok {
+			return nil, errors.New("invalid ID")
+		}
 		// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
 		//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
 		//    there is no way of gently handling errors here, but returned value is fine for us
-		isIncluded, _ := c.client.Blob.Included(ctx, height, c.Namespace, proofs[i], commitment)
+		isIncluded, _ := c.client.Blob.Included(ctx, id.Height, c.Namespace, proofs[i], id.Commitment)
 		included = append(included, isIncluded)
 	}
 	return included, nil
 }
 
-// heightLen is a length (in bytes) of serialized height.
-//
-// This is 8 as uint64 consist of 8 bytes.
-const heightLen = 8
-const txHashLen = 32
-
-func makeID(height uint64, commitment da.Commitment, txHash []byte) da.ID {
-	id := make([]byte, heightLen+txHashLen+len(commitment))
-	binary.LittleEndian.PutUint64(id, height)
-	copy(id[heightLen:heightLen+txHashLen], txHash)
-	copy(id[heightLen+txHashLen:], commitment)
-	return id
-}
-
-func SplitID(id da.ID) (uint64, []byte, da.Commitment) {
-	if len(id) <= heightLen {
-		return 0, nil, nil
-	}
-	// Return only height and commitment if ID is smaller to keep it backward compatible
-	if len(id) <= heightLen+txHashLen {
-		return 0, nil, id[heightLen : heightLen+txHashLen]
-	}
-	return binary.LittleEndian.Uint64(id[:heightLen]), id[heightLen : heightLen+txHashLen], id[heightLen+txHashLen:]
+type ID struct {
+	Height     uint64
+	Commitment []byte
+	TxHash     []byte
 }
