@@ -1,9 +1,9 @@
-[submodule "celestiada/verify/contracts/lib/forge-std"]
-	path = celestiada/verify/contracts/lib/forge-std
+[submodule "celestia/verify/contracts/lib/forge-std"]
+	path = celestia/verify/contracts/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
-[submodule "celestiada/verify/contracts/lib/blobstream-contracts"]
-	path = celestiada/verify/contracts/lib/blobstream-contracts
+[submodule "avail/verify/contracts/lib/forge-std"]
+	path = avail/verify/contracts/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "celestia/verify/contracts/lib/blobstream-contracts"]
+	path = celestia/verify/contracts/lib/blobstream-contracts
 	url = https://github.com/celestiaorg/blobstream-contracts
-[submodule "availda/verify/contracts/lib/forge-std"]
-	path = availda/verify/contracts/lib/forge-std
-	url = https://github.com/foundry-rs/forge-std
