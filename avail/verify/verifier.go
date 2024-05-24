@@ -10,8 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/stackrlabs/go-daash/availda"
-	"github.com/stackrlabs/go-daash/availda/verify/bindings/vectorverifier"
+	"github.com/stackrlabs/go-daash/avail"
+	"github.com/stackrlabs/go-daash/avail/verify/bindings/vectorverifier"
 	"github.com/stackrlabs/go-daash/da"
 )
 
@@ -21,7 +21,7 @@ const (
 
 // Verfifier is used to verify availability of Avail blobs on EVM chains
 type Verifier struct {
-	daClient         *availda.Client
+	daClient         *avail.Client
 	ethClient        *ethclient.Client
 	vectorXContract  common.Address
 	bridgeContract   common.Address
@@ -43,7 +43,7 @@ type SuccinctAPIResponse struct {
 	} `json:"data"`
 }
 
-func NewVerifier(client *availda.Client, ethEndpoint string, bridgeContract string, verifierContract string, vectorXContract string, availNetwork string) (*Verifier, error) {
+func NewVerifier(client *avail.Client, ethEndpoint string, bridgeContract string, verifierContract string, vectorXContract string, availNetwork string) (*Verifier, error) {
 	ethClient, err := ethclient.Dial(ethEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create eth client: %w", err)
@@ -79,7 +79,7 @@ func (d *Verifier) IsDataAvailable(blockHeight uint64, extIndex uint64) (bool, e
 }
 
 // IsDataIncluded verifies that the blob data corresponding to the given block height and external index is available on DA
-func (d *Verifier) IsDataIncluded(id availda.ID) (bool, error) {
+func (d *Verifier) IsDataIncluded(id avail.ID) (bool, error) {
 	blobs, err := d.daClient.Get(context.Background(), []da.ID{id})
 	if err != nil {
 		return false, fmt.Errorf("failed to get blob data: %w", err)
@@ -105,7 +105,7 @@ func (d *Verifier) IsDataIncluded(id availda.ID) (bool, error) {
 	return success, nil
 }
 
-func (d *Verifier) GetAggregatedProof(dataProof availda.DataProofRPCResponse, blockHeight uint64) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
+func (d *Verifier) GetAggregatedProof(dataProof avail.DataProofRPCResponse, blockHeight uint64) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
 	chainID, err := d.ethClient.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("cannot get chain id:%w", err)

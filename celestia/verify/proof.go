@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	bv "github.com/stackrlabs/go-daash/celestiada/verify/bindings/blobstreamverifier"
+	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
 	"github.com/tendermint/tendermint/rpc/client/http"
 )
 

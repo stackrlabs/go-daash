@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stackrlabs/go-daash/celestiada/verify/bindings/blobstreamx"
+	"github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamx"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

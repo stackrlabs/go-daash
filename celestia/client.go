@@ -1,4 +1,4 @@
-package celestiada
+package celestia
 
 import (
 	"context"

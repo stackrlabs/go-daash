@@ -1,4 +1,4 @@
-package availda
+package avail
 
 import (
 	"context"

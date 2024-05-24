@@ -2,7 +2,8 @@ package da
 
 import "context"
 
-// DA defines a Client interface to interact with Data Availability layers.
+// Generic interface to interact with any Data Availability layers.
+// Modified fork of https://github.com/rollkit/go-da
 type Client interface {
 	// MaxBlobSize returns the max blob size
 	MaxBlobSize(ctx context.Context) (uint64, error)

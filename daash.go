@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/stackrlabs/go-daash/availda"
-	"github.com/stackrlabs/go-daash/celestiada"
+	"github.com/stackrlabs/go-daash/avail"
+	"github.com/stackrlabs/go-daash/celestia"
 	"github.com/stackrlabs/go-daash/da"
-	"github.com/stackrlabs/go-daash/eigenda"
+	"github.com/stackrlabs/go-daash/eigen"
 	"github.com/stackrlabs/go-daash/mock"
 )
 
@@ -54,10 +54,10 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 	for _, layer := range layers {
 		switch layer {
 		case Avail:
-			var avail da.Client
+			var availClient da.Client
 			var err error
 			err = backoff.Retry(func() error {
-				avail, err = availda.NewClient(availConfigPath)
+				availClient, err = avail.NewClient(availConfigPath)
 				return err //nolint: wrapcheck
 			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
 			if err != nil {
@@ -65,7 +65,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 				return nil, fmt.Errorf(" Failed to create avail client: %v", err)
 			}
 			log.Println("🟢 Avail DA client initialised")
-			d.Clients[Avail] = avail
+			d.Clients[Avail] = availClient
 
 		case Celestia:
 			if celestiaAuthToken == "" {
@@ -74,7 +74,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			}
 			// We use a random pre-set hex string for namespace rn
 			namespace := "9cb73e106b03d1050a13"
-			celestia, err := celestiada.NewClient(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
+			celestia, err := celestia.NewClient(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
 			if err != nil {
 				return nil, err
 			}
@@ -82,7 +82,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			d.Clients[Celestia] = celestia
 
 		case Eigen:
-			eigen, err := eigenda.New("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+			eigen, err := eigen.NewClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
 			if err != nil {
 				return nil, err
 			}
@@ -103,13 +103,13 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 	switch daLayer {
 	case Avail:
-		availID, ok := id.(availda.ID)
+		availID, ok := id.(avail.ID)
 		if !ok {
 			return ""
 		}
 		return availID
 	case Celestia:
-		id, ok := id.(celestiada.ID)
+		id, ok := id.(celestia.ID)
 		if !ok {
 			return ""
 		}
@@ -129,13 +129,13 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 
 func GetExplorerLink(client da.Client, ids []da.ID) (string, error) {
 	switch daClient := client.(type) {
-	case *celestiada.Client:
-		id, ok := ids[0].(celestiada.ID)
+	case *celestia.Client:
+		id, ok := ids[0].(celestia.ID)
 		if !ok {
 			return "", fmt.Errorf("invalid ID")
 		}
 		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", hex.EncodeToString(id.TxHash)), nil
-	case *availda.Client:
+	case *avail.Client:
 		ext, err := daClient.GetExtrinsic(ids[0])
 		if err != nil {
 			return "", err
