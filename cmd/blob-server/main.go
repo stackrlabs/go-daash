@@ -154,10 +154,10 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			return
 		}
 		verifier, err := celestiaVerify.NewDAVerifier(
-			ethEndpoint,
-			trpcEndpoint,
-			common.HexToAddress(blobstreamverifierAddress),
-			common.HexToAddress(blobstreamxAddress),
+			chainMetadata["sepolia"]["rpcUrl"],
+			celestiaRpcUrl,
+			common.HexToAddress(chainMetadata["sepolia"]["blobstreamverifierAddress"]),
+			common.HexToAddress(chainMetadata["sepolia"]["blobstreamxAddress"]),
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -207,9 +207,11 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 		}
 		verifier, err := availVerify.NewVerifier(
 			daasher.Clients[daash.Avail].(*availda.DAClient),
-			ethEndpoint,
-			availBridgeAddress,
-			vectorVerifierAddress,
+			chainMetadata["sepolia"]["rpcUrl"],
+			chainMetadata["sepolia"]["availBridgeAddress"],
+			chainMetadata["sepolia"]["vectorVerifierAddress"],
+			chainMetadata["sepolia"]["vectorXAddress"],
+			daasher.Clients[daash.Avail].(*availda.DAClient).Config.Network,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -217,7 +219,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.VerifyDataIncluded(blockHeightUint, extIndexUint)
+		success, err := verifier.IsDataIncluded(blockHeightUint, extIndexUint)
 		if !success || err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

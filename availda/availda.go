@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"os"
 	"reflect"
@@ -19,9 +18,7 @@ import (
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rollkit/go-da"
-	"github.com/stackrlabs/go-daash/availda/verify/bindings/vectorverifier"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
@@ -49,7 +46,7 @@ type DataProof struct {
 }
 
 type DAClient struct {
-	config             Config
+	Config             Config
 	API                *gsrpc.SubstrateAPI
 	Meta               *types.Metadata
 	AppID              int
@@ -63,12 +60,12 @@ type DAClient struct {
 // Returns a newly initalised Avail DA client
 func New(configPath string) (*DAClient, error) {
 	a := DAClient{}
-	err := a.config.GetConfig(configPath)
+	err := a.Config.GetConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get config", err)
 	}
 
-	a.API, err = gsrpc.NewSubstrateAPI(a.config.WsRpcURL)
+	a.API, err = gsrpc.NewSubstrateAPI(a.Config.WsRpcURL)
 	if err != nil {
 		// log.Error("cannot get api:%w", zap.Error(err))
 		return nil, fmt.Errorf("cannot get api", err)
@@ -83,8 +80,8 @@ func New(configPath string) (*DAClient, error) {
 	a.AppID = 0
 
 	// if app id is greater than 0 then it must be created before submitting data
-	if a.config.AppID != 0 {
-		a.AppID = a.config.AppID
+	if a.Config.AppID != 0 {
+		a.AppID = a.Config.AppID
 	}
 
 	a.GenesisHash, err = a.API.RPC.Chain.GetBlockHash(0)
@@ -99,7 +96,7 @@ func New(configPath string) (*DAClient, error) {
 		return nil, fmt.Errorf("cannot get runtime version", err)
 	}
 
-	a.KeyringPair, err = signature.KeyringPairFromSecret(a.config.Seed, 42)
+	a.KeyringPair, err = signature.KeyringPairFromSecret(a.Config.Seed, 42)
 	if err != nil {
 		// log.Error("cannot get keyring pair:%w", zap.Error(err))
 		return nil, fmt.Errorf("cannot get keyring pair", err)
@@ -164,7 +161,7 @@ func (a *DAClient) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float
 	}
 
 	defer sub.Unsubscribe()
-	timeout := time.After(time.Duration(a.config.Timeout) * time.Second)
+	timeout := time.After(time.Duration(a.Config.Timeout) * time.Second)
 	var blockHash types.Hash
 out:
 	for {
@@ -220,7 +217,7 @@ out:
 		eBytes = []byte(strings.Trim(string(eBytes), "\""))
 		if string(extBytes) == string(eBytes) {
 			extIndex = idx
-			resp, err := http.Post(a.config.HttpApiURL, "application/json",
+			resp, err := http.Post(a.Config.HttpApiURL, "application/json",
 				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
 			if err != nil {
 				break
@@ -283,95 +280,34 @@ func (a *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitme
 	return nil, nil
 }
 
-type SuccinctAPIResponse struct {
-	Data struct {
-		BlockHash      string   `json:"blockHash"`
-		DataCommitment string   `json:"dataCommitment"`
-		DataRoot       string   `json:"dataRoot"`
-		Index          int64    `json:"index"`
-		MerkleBranch   []string `json:"merkleBranch"`
-		RangeHash      string   `json:"rangeHash"`
-		TotalLeaves    int64    `json:"totalLeaves"`
-	} `json:"data"`
-}
-
 // GetProofs returns the proofs for the given IDs
-func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
+func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (DataProofRPCResponse, error) {
 	var dataProofResp DataProofRPCResponse
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
 	if err != nil {
-		return nil, fmt.Errorf("cannot get block hash:%w", err)
+		return dataProofResp, fmt.Errorf("cannot get block hash:%w", err)
 	}
-	resp, err := http.Post(a.config.HttpApiURL, "application/json",
+	resp, err := http.Post(a.Config.HttpApiURL, "application/json",
 		strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", extIdx, blockHash)))
 
 	if err != nil {
-		return nil, fmt.Errorf("cannot get data proof:%w", err)
+		return dataProofResp, fmt.Errorf("cannot get data proof:%w", err)
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read data:%w", err)
+		return dataProofResp, fmt.Errorf("cannot read data:%w", err)
 	}
 	err = resp.Body.Close()
 	if err != nil {
-		return nil, fmt.Errorf("cannot close body:%w", err)
+		return dataProofResp, fmt.Errorf("cannot close body:%w", err)
 	}
 	fmt.Println("raw proof data", string(data))
 	err = json.Unmarshal(data, &dataProofResp)
 	if err != nil {
-		return nil, fmt.Errorf("cannot unmarshal data:%w", err)
+		return dataProofResp, fmt.Errorf("cannot unmarshal data:%w", err)
 	}
 	fmt.Println("dataProofResp", dataProofResp)
-
-	resp, err = http.Get(
-		fmt.Sprintf("%s?chainName=%s&contractChainId=%s&contractAddress=%s&blockHash=%s",
-			"https://beaconapi.succinct.xyz/api/integrations/vectorx",
-			"turing",
-			"11155111",
-			"0xe542dB219a7e2b29C7AEaEAce242c9a2Cd528F96",
-			blockHash.Hex(),
-		))
-	if err != nil {
-		return nil, fmt.Errorf("cannot get succinct proof:%w", err)
-	}
-	data, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read data:%w", err)
-	}
-	err = resp.Body.Close()
-	if err != nil {
-		return nil, fmt.Errorf("cannot close body:%w", err)
-	}
-	fmt.Println("raw succinct response", string(data))
-	var succinctAPIResponse SuccinctAPIResponse
-	err = json.Unmarshal(data, &succinctAPIResponse)
-	if err != nil {
-		return nil, fmt.Errorf("cannot unmarshal data:%w", err)
-	}
-	fmt.Println("Data proof:", dataProofResp)
-	fmt.Println("Succinct proof:", succinctAPIResponse)
-
-	var dataRootProof [][32]byte
-	for _, node := range succinctAPIResponse.Data.MerkleBranch {
-		hexBytes := common.HexToHash(node)
-		dataRootProof = append(dataRootProof, hexBytes)
-	}
-	var leafProof [][32]byte
-	for _, node := range dataProofResp.Result.DataProof.Proof {
-		hexBytes := common.HexToHash(node)
-		leafProof = append(leafProof, hexBytes)
-	}
-
-	return &vectorverifier.IAvailBridgeMerkleProofInput{
-		DataRootProof: dataRootProof,
-		LeafProof:     leafProof,
-		RangeHash:     common.HexToHash(succinctAPIResponse.Data.RangeHash),
-		DataRootIndex: big.NewInt(succinctAPIResponse.Data.Index),
-		BlobRoot:      common.HexToHash(dataProofResp.Result.DataProof.Roots.BlobRoot),
-		BridgeRoot:    common.HexToHash(dataProofResp.Result.DataProof.Roots.BridgeRoot),
-		Leaf:          common.HexToHash(dataProofResp.Result.DataProof.Leaf),
-		LeafIndex:     big.NewInt(dataProofResp.Result.DataProof.LeafIndex),
-	}, nil
+	return dataProofResp, nil
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
@@ -393,7 +329,7 @@ func (b BatchDAData) IsEmpty() bool {
 
 func (a *DAClient) GetAccountNextIndex() (types.UCompact, error) {
 	// TODO: Add context to the request
-	resp, err := http.Post(a.config.HttpApiURL, "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
+	resp, err := http.Post(a.Config.HttpApiURL, "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
 	if err != nil {
 		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot post account next index request", err)
 	}
@@ -441,6 +377,7 @@ type Config struct {
 	DestinationDomain  int    `json:"destination_domain"`
 	DestinationAddress string `json:"destination_address"`
 	Timeout            int    `json:"timeout"`
+	Network            string `json:"network"`
 }
 
 func (c *Config) GetConfig(configFileName string) error {
