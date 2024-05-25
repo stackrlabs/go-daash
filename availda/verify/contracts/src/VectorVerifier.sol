@@ -9,7 +9,7 @@ contract VectorVerifier {
         bytes32 blobHash, 
         IAvailBridge.MerkleProofInput memory input
     ) public view returns (bool) {
-        // Verify blob Hash correspnds to leaf in merkle proof
+        // Verify blob Hash corresponds to leaf in merkle proof
         require(input.leaf == blobHash, "Blob hash does not correspond to leaf in merkle proof");
         //  Verify availability of blob corresponding to leaf in merkle proof
         IAvailBridge availBridge = IAvailBridge(bridge);

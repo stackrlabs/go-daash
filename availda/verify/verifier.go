@@ -18,11 +18,7 @@ type DAVerifier struct {
 	verifierContract common.Address
 }
 
-func NewDAVerifier(configPath string, ethEndpoint string, bridgeContract string, verifierContract string) (*DAVerifier, error) {
-	client, err := availda.New(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create DAClient: %w", err)
-	}
+func NewVerifier(client *availda.DAClient, ethEndpoint string, bridgeContract string, verifierContract string) (*DAVerifier, error) {
 	ethClient, err := ethclient.Dial(ethEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create eth client: %w", err)

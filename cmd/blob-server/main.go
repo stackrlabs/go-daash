@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -17,25 +14,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
-	availVerifier "github.com/stackrlabs/go-daash/availda/verify"
-	verify "github.com/stackrlabs/go-daash/celestiada/verify"
+	"github.com/stackrlabs/go-daash/availda"
+	availVerify "github.com/stackrlabs/go-daash/availda/verify"
+	celestiaVerify "github.com/stackrlabs/go-daash/celestiada/verify"
 )
 
-// Constants
-const (
-	EigenDaRpcUrl             = "disperser-goerli.eigenda.xyz:443"
-	ethEndpoint               = "https://sepolia.drpc.org"
-	trpcEndpoint              = "https://celestia-mocha-rpc.publicnode.com:443"
-	blobstreamverifierAddress = "0x1Bf80E9b8d21ddCCE11b221E1a23781FEb58EB19" // Contract deployed here: https://sepolia.etherscan.io/address/0x1bf80e9b8d21ddcce11b221e1a23781feb58eb19
-	blobstreamxAddress        = "0xf0c6429ebab2e7dc6e05dafb61128be21f13cb1e"
-)
-
-type Job struct {
-	Data   []byte
-	Layer  daash.DALayer
-	ID     string
-	Status map[string]any // Human-readable job status
-}
 type BlobServer struct {
 	queue   chan Job
 	Daasher *daash.DABuilder
@@ -123,82 +106,17 @@ func main() {
 		c.JSON(http.StatusOK, job.Status)
 	})
 
-	router.GET("/celestia/verify/:txHash", func(c *gin.Context) {
+	router.GET("/:daName/verify", func(c *gin.Context) {
 		daName := c.Param("daName")
 		daLayer := daash.DALayer(daName)
-		if daLayer != daash.Celestia {
+		if !daash.IsValidDA(daLayer) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"message": fmt.Sprintf("DA %s not found", daName),
 			})
 			return
 		}
-		txHash := c.Param("txHash")
-		verifier, err := verify.NewDAVerifier(
-			ethEndpoint,
-			trpcEndpoint,
-			common.HexToAddress(blobstreamverifierAddress),
-			common.HexToAddress(blobstreamxAddress),
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("failed to create verifier: %v", err),
-			})
-			return
-		}
-		success, err := verifier.VerifyDataAvailable(txHash)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("failed to verify data: %v", err),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data verified onchain!",
-		})
-	})
 
-	router.GET("/avail/verify/:blockHeight/:extIndex", func(c *gin.Context) {
-		blockHeight := c.Param("blockHeight")
-		extIndex := c.Param("extIndex")
-		blockHeightUint, err := strconv.ParseUint(blockHeight, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": fmt.Sprintf("blockHeight %s is not a valid uint64", blockHeight),
-			})
-			return
-		}
-		extIndexUint, err := strconv.ParseUint(extIndex, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"message": fmt.Sprintf("extIndex %s is not a valid uint64", extIndex),
-			})
-			return
-		}
-		verifier, err := availVerifier.NewDAVerifier(
-			"./avail-config.json",
-			ethEndpoint,
-			"0x967F7DdC4ec508462231849AE81eeaa68Ad01389", // Avail bridge deployed on Sepolia
-			"0x6B26173C8afF316919542df8dA5A57888e398ee1", // Custom Vector verifier contract deployed on Sepolia
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"message": fmt.Sprintf("failed to create verifier: %v", err),
-			})
-			return
-		}
-		success, err := verifier.VerifyDataIncluded(blockHeightUint, extIndexUint)
-		if !success || err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": fmt.Sprintf("failed to verify data: %v", err),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data verified onchain!",
-		})
+		verifyDA(c, daLayer, server.Daasher)
 	})
 
 	go server.runJobPool()
@@ -225,37 +143,96 @@ func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Pro
 	return daIDs, daProofs, nil
 }
 
-func generateJobID() string {
-	b := make([]byte, 16) // Generates a 128-bit (16 bytes) random hex string
-	_, err := rand.Read(b)
-	if err != nil {
-		log.Fatalf("error generating random hex string: %v", err)
-	}
-	randomHexString := hex.EncodeToString(b)
-	return randomHexString
-}
-
-func run(ctx context.Context, b *BlobServer, job Job) {
-	var jobStatus map[string]any
-	ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
-	if err != nil {
-		jobStatus = gin.H{
-			"status": "failed",
-			"error":  err,
+func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
+	switch layer {
+	case daash.Celestia:
+		txHash, ok := c.GetQuery("txHash")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "txHash is required",
+			})
+			return
 		}
-	} else {
-		successLink, err := daash.GetExplorerLink(b.Daasher.Clients[job.Layer], ids)
+		verifier, err := celestiaVerify.NewDAVerifier(
+			ethEndpoint,
+			trpcEndpoint,
+			common.HexToAddress(blobstreamverifierAddress),
+			common.HexToAddress(blobstreamxAddress),
+		)
 		if err != nil {
-			log.Fatalf("cannot get explorer link: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to create verifier: %v", err),
+			})
+			return
 		}
-		jobStatus = gin.H{
-			"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
-			"ids":    ids,
-			"proofs": proofs,
-			"link":   successLink,
+		success, err := verifier.VerifyDataAvailable(txHash)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to verify data: %v", err),
+			})
+			return
 		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data verified onchain!",
+		})
+	case daash.Avail:
+		blockHeight, ok := c.GetQuery("blockHeight")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "blockHeight is required",
+			})
+			return
+		}
+		extIndex, ok := c.GetQuery("extIndex")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": "extIndex is required",
+			})
+			return
+		}
+		blockHeightUint, err := strconv.ParseUint(blockHeight, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("blockHeight %s is not a valid uint64", blockHeight),
+			})
+			return
+		}
+		extIndexUint, err := strconv.ParseUint(extIndex, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"message": fmt.Sprintf("extIndex %s is not a valid uint64", extIndex),
+			})
+			return
+		}
+		verifier, err := availVerify.NewVerifier(
+			daasher.Clients[daash.Avail].(*availda.DAClient),
+			ethEndpoint,
+			availBridgeAddress,
+			vectorVerifierAddress,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to create verifier: %v", err),
+			})
+			return
+		}
+		success, err := verifier.VerifyDataIncluded(blockHeightUint, extIndexUint)
+		if !success || err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": fmt.Sprintf("failed to verify data: %v", err),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data verified onchain!",
+		})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": fmt.Sprintf("DA %s not supported yet", layer),
+		})
+		return
 	}
-	b.Lock()
-	b.Jobs[job.ID] = Job{Data: job.Data, Layer: job.Layer, ID: job.ID, Status: jobStatus}
-	b.Unlock()
 }

@@ -283,7 +283,7 @@ func (a *DAClient) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitme
 	return nil, nil
 }
 
-type SuccintAPIResponse struct {
+type SuccinctAPIResponse struct {
 	Data struct {
 		BlockHash      string   `json:"blockHash"`
 		DataCommitment string   `json:"dataCommitment"`
@@ -297,7 +297,6 @@ type SuccintAPIResponse struct {
 
 // GetProofs returns the proofs for the given IDs
 func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
-	// TODO: Need to implement this
 	var dataProofResp DataProofRPCResponse
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
 	if err != nil {
@@ -333,7 +332,7 @@ func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int)
 			blockHash.Hex(),
 		))
 	if err != nil {
-		return nil, fmt.Errorf("cannot get succint proof:%w", err)
+		return nil, fmt.Errorf("cannot get succinct proof:%w", err)
 	}
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
@@ -343,17 +342,17 @@ func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int)
 	if err != nil {
 		return nil, fmt.Errorf("cannot close body:%w", err)
 	}
-	fmt.Println("raw succint response", string(data))
-	var succintAPIResponse SuccintAPIResponse
-	err = json.Unmarshal(data, &succintAPIResponse)
+	fmt.Println("raw succinct response", string(data))
+	var succinctAPIResponse SuccinctAPIResponse
+	err = json.Unmarshal(data, &succinctAPIResponse)
 	if err != nil {
 		return nil, fmt.Errorf("cannot unmarshal data:%w", err)
 	}
 	fmt.Println("Data proof:", dataProofResp)
-	fmt.Println("Succint proof:", succintAPIResponse)
+	fmt.Println("Succinct proof:", succinctAPIResponse)
 
 	var dataRootProof [][32]byte
-	for _, node := range succintAPIResponse.Data.MerkleBranch {
+	for _, node := range succinctAPIResponse.Data.MerkleBranch {
 		hexBytes := common.HexToHash(node)
 		dataRootProof = append(dataRootProof, hexBytes)
 	}
@@ -366,8 +365,8 @@ func (a *DAClient) GetProof(ctx context.Context, blockHeight uint32, extIdx int)
 	return &vectorverifier.IAvailBridgeMerkleProofInput{
 		DataRootProof: dataRootProof,
 		LeafProof:     leafProof,
-		RangeHash:     common.HexToHash(succintAPIResponse.Data.RangeHash),
-		DataRootIndex: big.NewInt(succintAPIResponse.Data.Index),
+		RangeHash:     common.HexToHash(succinctAPIResponse.Data.RangeHash),
+		DataRootIndex: big.NewInt(succinctAPIResponse.Data.Index),
 		BlobRoot:      common.HexToHash(dataProofResp.Result.DataProof.Roots.BlobRoot),
 		BridgeRoot:    common.HexToHash(dataProofResp.Result.DataProof.Roots.BridgeRoot),
 		Leaf:          common.HexToHash(dataProofResp.Result.DataProof.Leaf),
