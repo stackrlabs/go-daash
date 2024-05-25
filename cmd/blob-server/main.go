@@ -220,16 +220,23 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			return
 		}
 		success, err := verifier.IsDataIncluded(blockHeightUint, extIndexUint)
-		if !success || err != nil {
-			c.JSON(http.StatusOK, gin.H{
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
-				"message": fmt.Sprintf("failed to verify data: %v", err),
+				"message": fmt.Sprintf("error verifying data: %v", err),
+			})
+			return
+		}
+		if !success {
+			c.JSON(http.StatusOK, gin.H{
+				"success": success,
+				"message": "data availability cannot be verified onchain!",
 			})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": success,
-			"message": "data verified onchain!",
+			"message": "data availability succesfully verified onchain!",
 		})
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
