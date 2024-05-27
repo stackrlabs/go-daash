@@ -60,19 +60,19 @@ func NewClient(configPath string) (*Client, error) {
 	a := Client{}
 	err := a.Config.GetConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get config", err)
+		return nil, fmt.Errorf("cannot get config:%w", err)
 	}
 
 	a.API, err = gsrpc.NewSubstrateAPI(a.Config.WsRpcURL)
 	if err != nil {
 		// log.Error("cannot get api:%w", zap.Error(err))
-		return nil, fmt.Errorf("cannot get api", err)
+		return nil, fmt.Errorf("cannot get api:%w", err)
 	}
 
 	a.Meta, err = a.API.RPC.State.GetMetadataLatest()
 	if err != nil {
 		// log.Error("cannot get metadata:%w", zap.Error(err))
-		return nil, fmt.Errorf("cannot get metadata", err)
+		return nil, fmt.Errorf("cannot get metadata:%w", err)
 	}
 
 	a.AppID = 0
@@ -85,27 +85,21 @@ func NewClient(configPath string) (*Client, error) {
 	a.GenesisHash, err = a.API.RPC.Chain.GetBlockHash(0)
 	if err != nil {
 		// log.Error("cannot get genesis hash:%w", zap.Error(err))
-		return nil, fmt.Errorf("cannot get genesis hash", err)
+		return nil, fmt.Errorf("cannot get genesis hash:%w", err)
 	}
 
 	a.Rv, err = a.API.RPC.State.GetRuntimeVersionLatest()
 	if err != nil {
 		// log.Error("cannot get runtime version:%w", zap.Error(err))
-		return nil, fmt.Errorf("cannot get runtime version", err)
+		return nil, fmt.Errorf("cannot get runtime version:%w", err)
 	}
 
 	a.KeyringPair, err = signature.KeyringPairFromSecret(a.Config.Seed, 42)
 	if err != nil {
 		// log.Error("cannot get keyring pair:%w", zap.Error(err))
-		return nil, fmt.Errorf("cannot get keyring pair", err)
+		return nil, fmt.Errorf("cannot get keyring pair:%w", err)
 	}
 
-	// DestinationAddress, err = types.NewHashFromHexString(Config.DestinationAddress)
-	// if err != nil {
-	// 	log.Fatalf("cannot decode destination address:%w", err)
-	// }
-
-	// DestinationDomain = types.NewUCompactFromUInt(uint64(Config.DestinationDomain))
 	return &a, nil
 }
 
@@ -120,12 +114,11 @@ func (c *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 func (a *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
 	// TODO: Add support for multiple blobs
 	daBlob := daBlobs[0]
-	log.Println("data", zap.Any("data", daBlob))
-	log.Println("⚡️ Preparing to post data to Avail:%d bytes", zap.Int("data_size", len(daBlob)))
-	fmt.Println(*a)
+	log.Println("data", zap.String("data", string(daBlob)))
+	log.Printf("⚡️ Preparing to post data to Avail:%d bytes", len(daBlob))
 	newCall, err := types.NewCall(a.Meta, "DataAvailability.submit_data", types.NewBytes(daBlob))
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create new call", err)
+		return nil, nil, fmt.Errorf("cannot create new call:%w", err)
 	}
 
 	// Create the extrinsic
@@ -133,7 +126,7 @@ func (a *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64
 
 	nonce, err := a.GetAccountNextIndex()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot get account next index", err)
+		return nil, nil, fmt.Errorf("cannot get account next index:%w", err)
 	}
 
 	options := types.SignatureOptions{
@@ -147,15 +140,17 @@ func (a *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64
 		TransactionVersion: a.Rv.TransactionVersion,
 	}
 
+	fmt.Println("options transaction version", options.TransactionVersion, "spec version", options.SpecVersion)
+
 	err = ext.Sign(a.KeyringPair, options)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot sign extrinsic", err)
+		return nil, nil, fmt.Errorf("cannot sign extrinsic:%w", err)
 	}
 
 	// Send the extrinsic
 	sub, err := a.API.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot submit extrinsic", err)
+		return nil, nil, fmt.Errorf("cannot submit extrinsic:%w", err)
 	}
 
 	defer sub.Unsubscribe()
@@ -166,7 +161,7 @@ out:
 		select {
 		case status := <-sub.Chan():
 			if status.IsInBlock {
-				log.Println("📥 Submit data extrinsic included in block %v", zap.String("status in block", status.AsInBlock.Hex()))
+				log.Printf("📥 Submit data extrinsic included in block %v", status.AsInBlock.Hex())
 			}
 			if status.IsFinalized {
 				blockHash = status.AsFinalized
@@ -195,7 +190,7 @@ out:
 
 	block, err := a.API.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot get block", err)
+		return nil, nil, fmt.Errorf("cannot get block:%w", err)
 	}
 
 	var dataProofResp DataProofRPCResponse
@@ -259,10 +254,10 @@ func (a *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
 	ext, err := a.GetExtrinsic(ids[0])
 	if err != nil {
-		return nil, fmt.Errorf("cannot get extrinsic", err)
+		return nil, fmt.Errorf("cannot get extrinsic:%w", err)
 	}
 	blobData := ext.Method.Args[2:]
-	log.Println("📥 received data:%+v", zap.Any("data", blobData))
+	log.Printf("📥 received data:%+v", blobData)
 	return []da.Blob{blobData}, nil
 }
 
@@ -329,13 +324,13 @@ func (a *Client) GetAccountNextIndex() (types.UCompact, error) {
 	// TODO: Add context to the request
 	resp, err := http.Post(a.Config.HttpApiURL, "application/json", strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"system_accountNextIndex\",\"params\":[\"%v\"]}", a.KeyringPair.Address))) //nolint: noctx
 	if err != nil {
-		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot post account next index request", err)
+		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot post account next index request:%w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot read body", err)
+		return types.NewUCompactFromUInt(0), fmt.Errorf("cannot read body:%w", err)
 	}
 	var accountNextIndex AccountNextIndexRPCResponse
 	err = json.Unmarshal(data, &accountNextIndex)
@@ -365,18 +360,18 @@ type Config struct {
 func (c *Config) GetConfig(configFileName string) error {
 	jsonFile, err := os.Open(configFileName)
 	if err != nil {
-		return fmt.Errorf("cannot open config file", err)
+		return fmt.Errorf("cannot open config file:%w", err)
 	}
 	defer jsonFile.Close()
 
 	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
-		return fmt.Errorf("cannot read config file", err)
+		return fmt.Errorf("cannot read config file:%w", err)
 	}
 
 	err = json.Unmarshal(byteValue, c)
 	if err != nil {
-		return fmt.Errorf("cannot unmarshal config file", err)
+		return fmt.Errorf("cannot unmarshal config file:%w", err)
 	}
 
 	return nil
@@ -389,11 +384,11 @@ func (a *Client) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
 	}
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(availID.Height))
 	if err != nil {
-		log.Fatalf("cannot get block hash:%w", err)
+		return types.Extrinsic{}, fmt.Errorf("cannot get block hash:%w", err)
 	}
 	block, err := a.API.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
-		log.Fatalf("cannot get block:%w", err)
+		return types.Extrinsic{}, fmt.Errorf("cannot get block:%w", err)
 	}
 	return block.Block.Extrinsics[availID.ExtIndex], nil
 }
