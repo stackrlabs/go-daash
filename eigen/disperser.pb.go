@@ -4,7 +4,7 @@
 // 	protoc        v4.25.2
 // source: api/proto/disperser/disperser.proto
 
-package eigenda
+package eigen
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
