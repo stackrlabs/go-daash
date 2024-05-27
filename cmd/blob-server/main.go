@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/joho/godotenv"
 
 	"github.com/cenkalti/backoff/v4"
@@ -156,8 +155,8 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 		verifier, err := celestiaVerify.NewDAVerifier(
 			chainMetadata["sepolia"]["rpcUrl"],
 			celestiaRpcUrl,
-			common.HexToAddress(chainMetadata["sepolia"]["blobstreamverifierAddress"]),
-			common.HexToAddress(chainMetadata["sepolia"]["blobstreamxAddress"]),
+			chainMetadata["sepolia"]["blobstreamverifierAddress"],
+			chainMetadata["sepolia"]["blobstreamxAddress"],
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{

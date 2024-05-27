@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	succintBaseURL = "https://beaconapi.succinct.xyz/api/integrations/vectorx"
+	succinctBaseURL = "https://beaconapi.succinct.xyz/api/integrations/vectorx"
 )
 
 // Verfifier is used to verify availability of Avail blobs on EVM chains
@@ -117,7 +117,7 @@ func (d *Verifier) GetAggregatedProof(dataProof availda.DataProofRPCResponse, bl
 	}
 	resp, err := http.Get(
 		fmt.Sprintf("%s?chainName=%s&contractChainId=%s&contractAddress=%s&blockHash=%s",
-			succintBaseURL,
+			succinctBaseURL,
 			d.availNetwork,
 			chainID.String(),
 			d.vectorXContract.Hex(),

@@ -23,7 +23,7 @@ type DAVerifier struct {
 	blobstreamXContract common.Address
 }
 
-func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract common.Address, blobstreamXContract common.Address) (*DAVerifier, error) {
+func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract string, blobstreamXContract string) (*DAVerifier, error) {
 	ethClient, err := ethclient.Dial(ethEndpoint)
 	if err != nil {
 		return nil, err
@@ -35,8 +35,8 @@ func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract com
 	return &DAVerifier{
 		ethClient:           ethClient,
 		tRPCClient:          trpc,
-		verifierContract:    verifierContract,
-		blobstreamXContract: blobstreamXContract,
+		verifierContract:    common.HexToAddress(verifierContract),
+		blobstreamXContract: common.HexToAddress(blobstreamXContract),
 	}, nil
 }
 
