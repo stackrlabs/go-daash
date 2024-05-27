@@ -11,16 +11,16 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gin-gonic/gin"
-	"github.com/rollkit/go-da"
 	"github.com/stackrlabs/go-daash"
-	"github.com/stackrlabs/go-daash/availda"
-	availVerify "github.com/stackrlabs/go-daash/availda/verify"
-	celestiaVerify "github.com/stackrlabs/go-daash/celestiada/verify"
+	"github.com/stackrlabs/go-daash/avail"
+	availVerify "github.com/stackrlabs/go-daash/avail/verify"
+	celestiaVerify "github.com/stackrlabs/go-daash/celestia/verify"
+	"github.com/stackrlabs/go-daash/da"
 )
 
 type BlobServer struct {
 	queue   chan Job
-	Daasher *daash.DABuilder
+	Daasher *daash.ClientBuilder
 	Jobs    map[string]Job // map of job ID to job
 	sync.Mutex
 }
@@ -29,7 +29,7 @@ func NewBlobServer() *BlobServer {
 	return &BlobServer{
 		queue:   make(chan Job, 10),
 		Jobs:    make(map[string]Job),
-		Daasher: daash.NewDABuilder(),
+		Daasher: daash.NewClientBuilder(),
 	}
 }
 
@@ -123,7 +123,7 @@ func main() {
 	router.Run()
 }
 
-func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Proof, error) {
+func postToDA(c context.Context, data []byte, DAClient da.Client) ([]da.ID, []da.Proof, error) {
 	daProofs := make([]da.Proof, 1)
 	daIDs := make([]da.ID, 1)
 	err := backoff.Retry(func() error {
@@ -142,7 +142,8 @@ func postToDA(c context.Context, data []byte, DAClient da.DA) ([]da.ID, []da.Pro
 	return daIDs, daProofs, nil
 }
 
-func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
+func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.ClientBuilder) {
+	var success bool
 	switch layer {
 	case daash.Celestia:
 		txHash, ok := c.GetQuery("txHash")
@@ -152,7 +153,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		verifier, err := celestiaVerify.NewDAVerifier(
+		verifier, err := celestiaVerify.NewVerifier(
 			chainMetadata["sepolia"]["rpcUrl"],
 			celestiaRpcUrl,
 			chainMetadata["sepolia"]["blobstreamverifierAddress"],
@@ -164,17 +165,13 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.VerifyDataAvailable(txHash)
+		success, err = verifier.VerifyDataAvailable(txHash)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("failed to verify data: %v", err),
 			})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data verified onchain!",
-		})
 	case daash.Avail:
 		blockHeight, ok := c.GetQuery("blockHeight")
 		if !ok {
@@ -205,12 +202,12 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			return
 		}
 		verifier, err := availVerify.NewVerifier(
-			daasher.Clients[daash.Avail].(*availda.DAClient),
+			daasher.Clients[daash.Avail].(*avail.Client),
 			chainMetadata["sepolia"]["rpcUrl"],
 			chainMetadata["sepolia"]["availBridgeAddress"],
 			chainMetadata["sepolia"]["vectorVerifierAddress"],
 			chainMetadata["sepolia"]["vectorXAddress"],
-			daasher.Clients[daash.Avail].(*availda.DAClient).Config.Network,
+			daasher.Clients[daash.Avail].(*avail.Client).Config.Network,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -218,7 +215,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		success, err := verifier.IsDataIncluded(blockHeightUint, extIndexUint)
+		success, err = verifier.IsDataIncluded(avail.ID{Height: blockHeightUint, ExtIndex: uint32(extIndexUint)})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
@@ -226,21 +223,24 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		if !success {
-			c.JSON(http.StatusOK, gin.H{
-				"success": success,
-				"message": "data availability cannot be verified onchain!",
-			})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"success": success,
-			"message": "data availability succesfully verified onchain!",
-		})
+
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": fmt.Sprintf("DA %s not supported yet", layer),
 		})
 		return
 	}
+
+	if !success {
+		c.JSON(http.StatusOK, gin.H{
+			"success": success,
+			"message": "data availability cannot be verified onchain!",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": success,
+		"message": "data availability succesfully verified onchain!",
+	})
+
 }

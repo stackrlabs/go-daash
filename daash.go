@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/rollkit/go-da"
-	"github.com/rollkit/go-da/test"
-	"github.com/stackrlabs/go-daash/availda"
-	"github.com/stackrlabs/go-daash/celestiada"
-	"github.com/stackrlabs/go-daash/eigenda"
+	"github.com/stackrlabs/go-daash/avail"
+	"github.com/stackrlabs/go-daash/celestia"
+	"github.com/stackrlabs/go-daash/da"
+	"github.com/stackrlabs/go-daash/eigen"
+	"github.com/stackrlabs/go-daash/mock"
 )
 
 type DALayer string
@@ -35,18 +35,18 @@ func IsValidDA(layer DALayer) bool {
 	return false
 }
 
-type DABuilder struct {
-	Clients map[DALayer]da.DA
+type ClientBuilder struct {
+	Clients map[DALayer]da.Client
 }
 
-func NewDABuilder() *DABuilder {
-	return &DABuilder{
-		Clients: make(map[DALayer]da.DA),
+func NewClientBuilder() *ClientBuilder {
+	return &ClientBuilder{
+		Clients: make(map[DALayer]da.Client),
 	}
 }
 
 // Initiates a new DAManager with clients from the sepcified DA layers
-func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*DABuilder, error) {
+func (d *ClientBuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*ClientBuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
 	}
@@ -54,10 +54,10 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 	for _, layer := range layers {
 		switch layer {
 		case Avail:
-			var avail da.DA
+			var availClient da.Client
 			var err error
 			err = backoff.Retry(func() error {
-				avail, err = availda.New(availConfigPath)
+				availClient, err = avail.NewClient(availConfigPath)
 				return err //nolint: wrapcheck
 			}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5))
 			if err != nil {
@@ -65,7 +65,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 				return nil, fmt.Errorf(" Failed to create avail client: %v", err)
 			}
 			log.Println("🟢 Avail DA client initialised")
-			d.Clients[Avail] = avail
+			d.Clients[Avail] = availClient
 
 		case Celestia:
 			if celestiaAuthToken == "" {
@@ -74,7 +74,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			}
 			// We use a random pre-set hex string for namespace rn
 			namespace := "9cb73e106b03d1050a13"
-			celestia, err := celestiada.New(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
+			celestia, err := celestia.NewClient(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
 			if err != nil {
 				return nil, err
 			}
@@ -82,7 +82,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			d.Clients[Celestia] = celestia
 
 		case Eigen:
-			eigen, err := eigenda.New("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+			eigen, err := eigen.NewClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
 			if err != nil {
 				return nil, err
 			}
@@ -90,7 +90,7 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 			log.Println("🟢 Eigen DA client initialised")
 
 		case Mock:
-			d.Clients[Mock] = test.NewDummyDA()
+			d.Clients[Mock] = mock.NewDummyDA()
 			log.Println("🟢 Mock DA client initialised")
 
 		default:
@@ -103,36 +103,39 @@ func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConf
 func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 	switch daLayer {
 	case Avail:
-		blockHeight, extIdx := availda.SplitID(id)
-		return struct {
-			BlockHeight uint32 `json:"blockHeight"`
-			ExtIdx      uint32 `json:"extIdx"`
-		}{
-			BlockHeight: blockHeight,
-			ExtIdx:      extIdx,
+		availID, ok := id.(avail.ID)
+		if !ok {
+			return ""
 		}
+		return availID
 	case Celestia:
-		blockHeight, txHash, commitment := celestiada.SplitID(id)
+		id, ok := id.(celestia.ID)
+		if !ok {
+			return ""
+		}
 		return struct {
 			BlockHeight uint64        `json:"blockHeight"`
 			TxHash      string        `json:"txHash"`
 			Commitment  da.Commitment `json:"commitment"`
 		}{
-			BlockHeight: blockHeight,
-			TxHash:      hex.EncodeToString(txHash),
-			Commitment:  commitment,
+			BlockHeight: id.Height,
+			TxHash:      hex.EncodeToString(id.TxHash),
+			Commitment:  id.Commitment,
 		}
 	default:
 		return ""
 	}
 }
 
-func GetExplorerLink(client da.DA, ids []da.ID) (string, error) {
+func GetExplorerLink(client da.Client, ids []da.ID) (string, error) {
 	switch daClient := client.(type) {
-	case *celestiada.DAClient:
-		_, txHash, _ := celestiada.SplitID(ids[0])
-		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", hex.EncodeToString(txHash)), nil
-	case *availda.DAClient:
+	case *celestia.Client:
+		id, ok := ids[0].(celestia.ID)
+		if !ok {
+			return "", fmt.Errorf("invalid ID")
+		}
+		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", hex.EncodeToString(id.TxHash)), nil
+	case *avail.Client:
 		ext, err := daClient.GetExtrinsic(ids[0])
 		if err != nil {
 			return "", err
