@@ -20,7 +20,7 @@ import (
 
 type BlobServer struct {
 	queue   chan Job
-	Daasher *daash.DABuilder
+	Daasher *daash.ClientBuilder
 	Jobs    map[string]Job // map of job ID to job
 	sync.Mutex
 }
@@ -29,7 +29,7 @@ func NewBlobServer() *BlobServer {
 	return &BlobServer{
 		queue:   make(chan Job, 10),
 		Jobs:    make(map[string]Job),
-		Daasher: daash.NewDABuilder(),
+		Daasher: daash.NewClientBuilder(),
 	}
 }
 
@@ -142,7 +142,7 @@ func postToDA(c context.Context, data []byte, DAClient da.Client) ([]da.ID, []da
 	return daIDs, daProofs, nil
 }
 
-func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
+func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.ClientBuilder) {
 	var success bool
 	switch layer {
 	case daash.Celestia:
@@ -153,7 +153,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.DABuilder) {
 			})
 			return
 		}
-		verifier, err := celestiaVerify.NewDAVerifier(
+		verifier, err := celestiaVerify.NewVerifier(
 			chainMetadata["sepolia"]["rpcUrl"],
 			celestiaRpcUrl,
 			chainMetadata["sepolia"]["blobstreamverifierAddress"],

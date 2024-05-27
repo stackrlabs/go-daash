@@ -16,14 +16,14 @@ import (
 	"github.com/tendermint/tendermint/rpc/client/http"
 )
 
-type DAVerifier struct {
+type Verifier struct {
 	ethClient           *ethclient.Client
 	tRPCClient          *http.HTTP
 	verifierContract    common.Address
 	blobstreamXContract common.Address
 }
 
-func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract string, blobstreamXContract string) (*DAVerifier, error) {
+func NewVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract string, blobstreamXContract string) (*Verifier, error) {
 	ethClient, err := ethclient.Dial(ethEndpoint)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract str
 	if err != nil {
 		return nil, err
 	}
-	return &DAVerifier{
+	return &Verifier{
 		ethClient:           ethClient,
 		tRPCClient:          trpc,
 		verifierContract:    common.HexToAddress(verifierContract),
@@ -40,7 +40,7 @@ func NewDAVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract str
 	}, nil
 }
 
-func (d *DAVerifier) VerifyDataAvailable(txHash string) (bool, error) {
+func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
 	shareRange, err := d.GetSharePointer(txHash)
 	if err != nil {
 		return false, fmt.Errorf("failed to get share range: %w", err)
@@ -92,7 +92,7 @@ func (d *DAVerifier) VerifyDataAvailable(txHash string) (bool, error) {
 	return true, nil
 }
 
-func (d *DAVerifier) GetSharePointer(txHash string) (SharePointer, error) {
+func (d *Verifier) GetSharePointer(txHash string) (SharePointer, error) {
 	txHashBytes, err := hex.DecodeString(txHash)
 	if err != nil {
 		return SharePointer{}, fmt.Errorf("failed to decode transaction hash: %w", err)

@@ -35,18 +35,18 @@ func IsValidDA(layer DALayer) bool {
 	return false
 }
 
-type DABuilder struct {
+type ClientBuilder struct {
 	Clients map[DALayer]da.Client
 }
 
-func NewDABuilder() *DABuilder {
-	return &DABuilder{
+func NewClientBuilder() *ClientBuilder {
+	return &ClientBuilder{
 		Clients: make(map[DALayer]da.Client),
 	}
 }
 
 // Initiates a new DAManager with clients from the sepcified DA layers
-func (d *DABuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*DABuilder, error) {
+func (d *ClientBuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*ClientBuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
 	}
