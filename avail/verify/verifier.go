@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stackrlabs/go-daash/avail"
 	"github.com/stackrlabs/go-daash/avail/verify/bindings/vectorverifier"
-	"github.com/stackrlabs/go-daash/da"
 )
 
 const (
@@ -58,12 +57,16 @@ func NewVerifier(client *avail.Client, ethEndpoint string, bridgeContract string
 	}, nil
 }
 
-func (d *Verifier) IsDataAvailable(blockHeight uint64, extIndex uint64) (bool, error) {
-	dataProof, err := d.daClient.GetProof(context.Background(), uint32(blockHeight), int(extIndex))
+func (d *Verifier) IsDataAvailable(id avail.ID) (bool, error) {
+	dataProof, err := d.daClient.GetProof(context.Background(), id)
 	if err != nil {
 		return false, fmt.Errorf("failed to get data proof: %w", err)
 	}
-	proof, err := d.GetAggregatedProof(dataProof, blockHeight)
+	dataProofRPC, ok := dataProof.(avail.DataProofRPCResponse)
+	if !ok {
+		return false, fmt.Errorf("failed to assert type: %w", err)
+	}
+	proof, err := d.GetAggregatedProof(dataProofRPC, id.Height)
 	if err != nil {
 		return false, fmt.Errorf("failed to get aggregated proof: %w", err)
 	}
@@ -80,17 +83,21 @@ func (d *Verifier) IsDataAvailable(blockHeight uint64, extIndex uint64) (bool, e
 
 // IsDataIncluded verifies that the blob data corresponding to the given block height and external index is available on DA
 func (d *Verifier) IsDataIncluded(id avail.ID) (bool, error) {
-	blobs, err := d.daClient.Get(context.Background(), []da.ID{id})
+	blob, err := d.daClient.Get(context.Background(), id)
 	if err != nil {
 		return false, fmt.Errorf("failed to get blob data: %w", err)
 	}
-	fmt.Println("size of blob data:", len(blobs[0]))
+	fmt.Println("size of blob data:", len(blob))
 
-	dataProof, err := d.daClient.GetProof(context.Background(), uint32(id.Height), int(id.ExtIndex))
+	dataProof, err := d.daClient.GetProof(context.Background(), id)
 	if err != nil {
 		return false, fmt.Errorf("failed to get data proof: %w", err)
 	}
-	proof, err := d.GetAggregatedProof(dataProof, id.Height)
+	dataProofRPC, ok := dataProof.(avail.DataProofRPCResponse)
+	if !ok {
+		return false, fmt.Errorf("failed to assert type: %w", err)
+	}
+	proof, err := d.GetAggregatedProof(dataProofRPC, id.Height)
 	if err != nil {
 		return false, fmt.Errorf("failed to get aggregated proof: %w", err)
 	}
@@ -98,7 +105,7 @@ func (d *Verifier) IsDataIncluded(id avail.ID) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create vector verifier: %w", err)
 	}
-	success, err := verifier.VerifyDataInclusion(nil, d.bridgeContract, blobs[0], *proof)
+	success, err := verifier.VerifyDataInclusion(nil, d.bridgeContract, blob, *proof)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify blob leaf: %w", err)
 	}

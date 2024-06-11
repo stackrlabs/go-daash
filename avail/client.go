@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -16,33 +14,10 @@ import (
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stackrlabs/go-daash/da"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
 )
-
-type AccountNextIndexRPCResponse struct {
-	Result uint `json:"result"`
-}
-type DataProofRPCResponse struct {
-	ID      int64  `json:"id"`
-	Jsonrpc string `json:"jsonrpc"`
-	Result  struct {
-		DataProof `json:"dataProof"`
-	} `json:"result"`
-}
-type DataProof struct {
-	Leaf           string   `json:"leaf"`
-	LeafIndex      int64    `json:"leafIndex"`
-	NumberOfLeaves int64    `json:"numberOfLeaves"`
-	Proof          []string `json:"proof"`
-	Roots          struct {
-		BlobRoot   string `json:"blobRoot"`
-		BridgeRoot string `json:"bridgeRoot"`
-		DataRoot   string `json:"dataRoot"`
-	} `json:"roots"`
-}
 
 type Client struct {
 	Config             Config
@@ -112,50 +87,45 @@ func (c *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 
 // Submit a list of blobs to Avail DA
 // Currently, we submit to a trusted RPC Avail node. In the future, we will submit via an Avail light client.
-func (a *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
-	// TODO: Add support for multiple blobs
-	daBlob := daBlobs[0]
-	log.Println("data", zap.String("data", string(daBlob)))
+func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (da.ID, error) {
 	log.Printf("⚡️ Preparing to post data to Avail:%d bytes", len(daBlob))
-	newCall, err := types.NewCall(a.Meta, "DataAvailability.submit_data", types.NewBytes(daBlob))
+	newCall, err := types.NewCall(c.Meta, "DataAvailability.submit_data", types.NewBytes(daBlob))
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create new call:%w", err)
+		return nil, fmt.Errorf("cannot create new call:%w", err)
 	}
 
 	// Create the extrinsic
 	ext := types.NewExtrinsic(newCall)
 
-	nonce, err := a.GetAccountNextIndex()
+	nonce, err := c.GetAccountNextIndex()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot get account next index:%w", err)
+		return nil, fmt.Errorf("cannot get account next index:%w", err)
 	}
 
 	options := types.SignatureOptions{
-		BlockHash:          a.GenesisHash,
+		BlockHash:          c.GenesisHash,
 		Era:                types.ExtrinsicEra{IsMortalEra: false},
-		GenesisHash:        a.GenesisHash,
+		GenesisHash:        c.GenesisHash,
 		Nonce:              nonce,
-		SpecVersion:        a.Rv.SpecVersion,
+		SpecVersion:        c.Rv.SpecVersion,
 		Tip:                types.NewUCompactFromUInt(1000),
-		AppID:              types.NewUCompactFromUInt(uint64(a.AppID)),
-		TransactionVersion: a.Rv.TransactionVersion,
+		AppID:              types.NewUCompactFromUInt(uint64(c.AppID)),
+		TransactionVersion: c.Rv.TransactionVersion,
 	}
 
-	fmt.Println("options transaction version", options.TransactionVersion, "spec version", options.SpecVersion)
-
-	err = ext.Sign(a.KeyringPair, options)
+	err = ext.Sign(c.KeyringPair, options)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot sign extrinsic:%w", err)
+		return nil, fmt.Errorf("cannot sign extrinsic:%w", err)
 	}
 
 	// Send the extrinsic
-	sub, err := a.API.RPC.Author.SubmitAndWatchExtrinsic(ext)
+	sub, err := c.API.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot submit extrinsic:%w", err)
+		return nil, fmt.Errorf("cannot submit extrinsic:%w", err)
 	}
 
 	defer sub.Unsubscribe()
-	timeout := time.After(time.Duration(a.Config.Timeout) * time.Second)
+	timeout := time.After(time.Duration(c.Config.Timeout) * time.Second)
 	var blockHash types.Hash
 out:
 	for {
@@ -168,34 +138,29 @@ out:
 				blockHash = status.AsFinalized
 				break out
 			} else if status.IsDropped {
-				return nil, nil, fmt.Errorf("extrinsic dropped")
+				return nil, fmt.Errorf("extrinsic dropped")
 			} else if status.IsUsurped {
-				return nil, nil, fmt.Errorf("extrinsic usurped")
+				return nil, fmt.Errorf("extrinsic usurped")
 			} else if status.IsRetracted {
-				return nil, nil, fmt.Errorf("extrinsic retracted")
+				return nil, fmt.Errorf("extrinsic retracted")
 			} else if status.IsInvalid {
-				return nil, nil, fmt.Errorf("extrinsic invalid")
+				return nil, fmt.Errorf("extrinsic invalid")
 			}
 		case <-timeout:
-			return nil, nil, fmt.Errorf("timeout")
+			return nil, fmt.Errorf("timeout")
 		}
 	}
 
 	log.Println("✅ Data submitted by sequencer bytes against AppID sent with hash", zap.String("block hash", blockHash.Hex()))
 
-	var batchHash [32]byte
-
-	h := sha3.NewLegacyKeccak256()
-	h.Write(daBlobs[0])
-	h.Sum(batchHash[:0])
-
-	block, err := a.API.RPC.Chain.GetBlock(blockHash)
+	block, err := c.API.RPC.Chain.GetBlock(blockHash)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot get block:%w", err)
+		return nil, fmt.Errorf("cannot get block:%w", err)
 	}
 
-	var dataProofResp DataProofRPCResponse
 	var extIndex int
+	// Right now, we look trhough all extrinsics in the block to find our submitted extrinsic's index
+	// This works for now but we should find a better way to do this (TODO)
 	for idx, e := range block.Block.Extrinsics {
 		// Look for our submitted extrinsic in the block
 		extBytes, err := json.Marshal(ext)
@@ -211,78 +176,58 @@ out:
 		eBytes = []byte(strings.Trim(string(eBytes), "\""))
 		if string(extBytes) == string(eBytes) {
 			extIndex = idx
-			resp, err := http.Post(a.Config.HttpApiURL, "application/json",
-				strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProofV2\",\"params\":[%d, \"%#x\"]}", idx+1, blockHash))) //nolint: noctx
-			if err != nil {
-				break
-			}
-			data, err := io.ReadAll(resp.Body)
-			if err != nil {
-				break
-			}
-			err = resp.Body.Close()
-			if err != nil {
-				break
-			}
-			err = json.Unmarshal(data, &dataProofResp)
-			if err != nil {
-				break
-			}
-
-			if dataProofResp.Result.DataProof.Leaf == fmt.Sprintf("%#x", batchHash) {
-				log.Println("data proof validated", dataProofResp.Result)
-			}
-			break
 		}
 	}
-	dataProof := dataProofResp.Result.DataProof
-	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := ID{Height: uint64(block.Block.Header.Number), ExtIndex: uint32(extIndex), BlobHash: common.BytesToHash(batchHash[:])}
-	blobIDs := make([]da.ID, 1)
-	blobIDs[0] = blobID
 
-	serialisedProofs := make([]da.Proof, 1)
-	for _, word := range dataProof.Proof {
-		serialisedProofs[0] = append(serialisedProofs[0], word...)
+	blobHash, err := c.Commit(ctx, daBlob)
+	if err != nil {
+		return nil, fmt.Errorf("cannot commit:%w", err)
+	}
+	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
+	blobID := ID{
+		Height:   uint64(block.Block.Header.Number),
+		ExtIndex: uint32(extIndex),
+		BlobHash: blobHash.([32]byte),
 	}
 
-	log.Printf("💿 received data proof:%+v\n", zap.Any("dataproof", dataProof))
-	return blobIDs, serialisedProofs, nil
+	return blobID, nil
 }
 
 // Get returns Blob for each given ID, or an error.
-func (a *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+func (c *Client) Get(ctx context.Context, id da.ID) (da.Blob, error) {
 	// TODO: We are dealing with single blobs for now. We will need to handle multiple blobs in the future.
-	ext, err := a.GetExtrinsic(ids[0])
+	ext, err := c.GetExtrinsic(id)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get extrinsic:%w", err)
 	}
 	blobData := ext.Method.Args[2:]
 	log.Printf("📥 received data:%+v", blobData)
-	return []da.Blob{blobData}, nil
+	return blobData, nil
 }
 
-// GetIDs returns IDs of all Blobs located in DA at given height.
-func (a *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
-	// TODO: Need to implement this
-	return nil, nil
+// Commit creates a Commitment for a given Blob.
+func (a *Client) Commit(ctx context.Context, daBlob da.Blob) (da.Commitment, error) {
+	var blobHash [32]byte
+	h := sha3.NewLegacyKeccak256()
+	h.Write(daBlob)
+	h.Sum(blobHash[:0])
+
+	return blobHash, nil
 }
 
-// Commit creates a Commitment for each given Blob.
-func (a *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
-	// TODO: Need to implement this
-	return nil, nil
-}
-
-// GetProofs returns the proofs for the given IDs
-func (a *Client) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (DataProofRPCResponse, error) {
+// GetProof returns the proof of inclusion for the given ID
+func (a *Client) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
+	availID, ok := id.(ID)
+	if !ok {
+		return nil, fmt.Errorf("invalid ID")
+	}
 	var dataProofResp DataProofRPCResponse
-	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(blockHeight))
+	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(availID.Height))
 	if err != nil {
 		return dataProofResp, fmt.Errorf("cannot get block hash:%w", err)
 	}
 	resp, err := http.Post(a.Config.HttpApiURL, "application/json",
-		strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", extIdx, blockHash)))
+		strings.NewReader(fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"kate_queryDataProof\",\"params\":[%d, \"%#x\"]}", availID.ExtIndex, blockHash)))
 
 	if err != nil {
 		return dataProofResp, fmt.Errorf("cannot get data proof:%w", err)
@@ -305,20 +250,22 @@ func (a *Client) GetProof(ctx context.Context, blockHeight uint32, extIdx int) (
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-func (c *Client) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
-	// TODO: Need to implement this
-	return nil, nil
+func (c *Client) Validate(ctx context.Context, id da.ID, daProof da.Proof) (bool, error) {
+	availID, ok := id.(ID)
+	if !ok {
+		return false, fmt.Errorf("invalid ID")
+	}
+	proof, ok := daProof.(Proof)
+	if !ok {
+		return false, fmt.Errorf("invalid proof")
+	}
+
+	return proof.Result.DataProof.Leaf == fmt.Sprintf("%#x", availID.BlobHash), nil
 }
 
-type BatchDAData struct {
-	BlockNumber uint
-	Proof       []string `json:"proof"`
-	Width       uint     `json:"number_of_leaves"`
-	LeafIndex   uint     `json:"leaf_index"`
-}
-
-func (b BatchDAData) IsEmpty() bool {
-	return reflect.DeepEqual(b, BatchDAData{})
+// Utility functions
+type AccountNextIndexRPCResponse struct {
+	Result uint `json:"result"`
 }
 
 func (a *Client) GetAccountNextIndex() (types.UCompact, error) {
@@ -340,43 +287,6 @@ func (a *Client) GetAccountNextIndex() (types.UCompact, error) {
 	}
 
 	return types.NewUCompactFromUInt(uint64(accountNextIndex.Result)), nil
-}
-
-type ID struct {
-	Height   uint64      `json:"blockHeight"`
-	ExtIndex uint32      `json:"extIdx"`
-	BlobHash common.Hash `json:"blobHash"`
-}
-
-type Config struct {
-	Seed               string `json:"seed"`
-	WsRpcURL           string `json:"wsRpcUrl"`
-	HttpApiURL         string `json:"httpApiUrl"`
-	AppID              int    `json:"app_id"`
-	DestinationDomain  int    `json:"destination_domain"`
-	DestinationAddress string `json:"destination_address"`
-	Timeout            int    `json:"timeout"`
-	Network            string `json:"network"`
-}
-
-func (c *Config) GetConfig(configFileName string) error {
-	jsonFile, err := os.Open(configFileName)
-	if err != nil {
-		return fmt.Errorf("cannot open config file:%w", err)
-	}
-	defer jsonFile.Close()
-
-	byteValue, err := io.ReadAll(jsonFile)
-	if err != nil {
-		return fmt.Errorf("cannot read config file:%w", err)
-	}
-
-	err = json.Unmarshal(byteValue, c)
-	if err != nil {
-		return fmt.Errorf("cannot unmarshal config file:%w", err)
-	}
-
-	return nil
 }
 
 func (a *Client) GetExtrinsic(id da.ID) (types.Extrinsic, error) {
