@@ -2,7 +2,6 @@ package daash
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -119,24 +118,24 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			Commitment  da.Commitment `json:"commitment"`
 		}{
 			BlockHeight: id.Height,
-			TxHash:      hex.EncodeToString(id.TxHash),
-			Commitment:  id.Commitment,
+			TxHash:      id.TxHash,
+			Commitment:  id.ShareCommitment,
 		}
 	default:
 		return ""
 	}
 }
 
-func GetExplorerLink(client da.Client, ids []da.ID) (string, error) {
+func GetExplorerLink(client da.Client, id da.ID) (string, error) {
 	switch daClient := client.(type) {
 	case *celestia.Client:
-		id, ok := ids[0].(celestia.ID)
+		id, ok := id.(celestia.ID)
 		if !ok {
 			return "", fmt.Errorf("invalid ID")
 		}
-		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", hex.EncodeToString(id.TxHash)), nil
+		return fmt.Sprintf("https://mocha-4.celenium.io/tx/%s", id.TxHash), nil
 	case *avail.Client:
-		ext, err := daClient.GetExtrinsic(ids[0])
+		ext, err := daClient.GetExtrinsic(id)
 		if err != nil {
 			return "", err
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/celestiaorg/celestia-app/pkg/shares"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/stackrlabs/go-daash/celestia"
 	bv "github.com/stackrlabs/go-daash/celestia/verify/blobstream/verifier"
 	"github.com/tendermint/tendermint/rpc/client/http"
 )
@@ -37,14 +38,9 @@ func NewVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract strin
 	}, nil
 }
 
-func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
-	shareRange, err := GetSharePointer(txHash, d.tRPCClient)
-	if err != nil {
-		return false, fmt.Errorf("failed to get share range: %w", err)
-	}
-	fmt.Println("Successfully got share range", shareRange)
-
-	proof, root, err := GetShareProof(d.ethClient, d.tRPCClient, &shareRange, d.blobstreamXContract)
+func (d *Verifier) VerifyDataAvailable(id celestia.ID) (bool, error) {
+	sp := id.SharePointer
+	proof, root, err := d.GetShareProof(sp)
 	if err != nil {
 		return false, fmt.Errorf("failed to get share proof: %w", err)
 	}
@@ -70,9 +66,9 @@ func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
 		nil,
 		d.blobstreamXContract,
 		bv.SpanSequence{
-			Height: big.NewInt(shareRange.Height),
-			Index:  big.NewInt(shareRange.Start),
-			Length: big.NewInt(shareRange.End - shareRange.Start),
+			Height: big.NewInt(sp.Height),
+			Index:  big.NewInt(sp.Start),
+			Length: big.NewInt(sp.End - sp.Start),
 		},
 		proof.RowRoots,
 		proof.RowProofs,
