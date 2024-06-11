@@ -2,8 +2,10 @@ package verify
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
+	"github.com/celestiaorg/celestia-app/pkg/square"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
@@ -59,4 +61,32 @@ func GetShareProof(eth *ethclient.Client, trpc *http.HTTP, sp *SharePointer, blo
 		RowProofs:        toRowProofs(shareProof.RowProof.Proofs),
 		AttestationProof: toAttestationProof(nonce, height, blockDataRoot, dcProof.Proof),
 	}, blockDataRoot, nil
+}
+
+// GetSharePointer returns the share pointer for the given transaction hash.
+func GetSharePointer(txHash string, tRPCClient *http.HTTP) (SharePointer, error) {
+	txHashBytes, err := hex.DecodeString(txHash)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to decode transaction hash: %w", err)
+	}
+	tx, err := tRPCClient.Tx(context.Background(), txHashBytes, true)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	blockRes, err := tRPCClient.Block(context.Background(), &tx.Height)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	shareRange, err := square.BlobShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), 0, blockRes.Block.Header.Version.App)
+	// shareRange, err := square.TxShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), blockRes.Block.Header.Version.App)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get share range: %w", err)
+	}
+	return SharePointer{
+		Height: tx.Height,
+		Start:  int64(shareRange.Start),
+		End:    int64(shareRange.End),
+	}, nil
 }

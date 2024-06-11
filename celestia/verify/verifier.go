@@ -1,15 +1,12 @@
 package verify
 
 import (
-	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"errors"
 
 	"github.com/celestiaorg/celestia-app/pkg/shares"
-	"github.com/celestiaorg/celestia-app/pkg/square"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
@@ -41,7 +38,7 @@ func NewVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract strin
 }
 
 func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
-	shareRange, err := d.GetSharePointer(txHash)
+	shareRange, err := GetSharePointer(txHash, d.tRPCClient)
 	if err != nil {
 		return false, fmt.Errorf("failed to get share range: %w", err)
 	}
@@ -90,31 +87,4 @@ func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func (d *Verifier) GetSharePointer(txHash string) (SharePointer, error) {
-	txHashBytes, err := hex.DecodeString(txHash)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to decode transaction hash: %w", err)
-	}
-	tx, err := d.tRPCClient.Tx(context.Background(), txHashBytes, true)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get transaction: %w", err)
-	}
-
-	blockRes, err := d.tRPCClient.Block(context.Background(), &tx.Height)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get block: %w", err)
-	}
-
-	shareRange, err := square.BlobShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), 0, blockRes.Block.Header.Version.App)
-	// shareRange, err := square.TxShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), blockRes.Block.Header.Version.App)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get share range: %w", err)
-	}
-	return SharePointer{
-		Height: tx.Height,
-		Start:  int64(shareRange.Start),
-		End:    int64(shareRange.End),
-	}, nil
 }

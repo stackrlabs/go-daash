@@ -16,6 +16,7 @@ import (
 	gsrpc "github.com/centrifuge/go-substrate-rpc-client/v4"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stackrlabs/go-daash/da"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/sha3"
@@ -236,7 +237,7 @@ out:
 	}
 	dataProof := dataProofResp.Result.DataProof
 	// NOTE: Substrate's BlockNumber type is an alias for u32 type, which is uint32
-	blobID := ID{Height: uint64(block.Block.Header.Number), ExtIndex: uint32(extIndex)}
+	blobID := ID{Height: uint64(block.Block.Header.Number), ExtIndex: uint32(extIndex), BlobHash: common.BytesToHash(batchHash[:])}
 	blobIDs := make([]da.ID, 1)
 	blobIDs[0] = blobID
 
@@ -342,8 +343,9 @@ func (a *Client) GetAccountNextIndex() (types.UCompact, error) {
 }
 
 type ID struct {
-	Height   uint64 `json:"blockHeight"`
-	ExtIndex uint32 `json:"extIdx"`
+	Height   uint64      `json:"blockHeight"`
+	ExtIndex uint32      `json:"extIdx"`
+	BlobHash common.Hash `json:"blobHash"`
 }
 
 type Config struct {
