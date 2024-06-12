@@ -45,7 +45,14 @@ func NewClientBuilder() *ClientBuilder {
 }
 
 // Initiates a new DAManager with clients from the sepcified DA layers
-func (d *ClientBuilder) InitClients(ctx context.Context, layers []DALayer, availConfigPath string, celestiaAuthToken string, celestiaLightClientUrl string) (*ClientBuilder, error) {
+func (d *ClientBuilder) InitClients(
+	ctx context.Context,
+	layers []DALayer,
+	availConfigPath string,
+	celestiaAuthToken string,
+	celestiaLightClientUrl string,
+	celestiaNodeUrl string,
+) (*ClientBuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
 	}
@@ -73,7 +80,7 @@ func (d *ClientBuilder) InitClients(ctx context.Context, layers []DALayer, avail
 			}
 			// We use a random pre-set hex string for namespace rn
 			namespace := "9cb73e106b03d1050a13"
-			celestia, err := celestia.NewClient(ctx, celestiaLightClientUrl, celestiaAuthToken, namespace, -1)
+			celestia, err := celestia.NewClient(ctx, celestiaLightClientUrl, celestiaNodeUrl, celestiaAuthToken, namespace, -1)
 			if err != nil {
 				return nil, err
 			}

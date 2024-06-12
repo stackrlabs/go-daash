@@ -59,20 +59,20 @@ func (e *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 	return 512 * 1024, nil // Currently set at 512KB
 }
 
-func (e *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
-	blobInfo, err := e.disperseBlob(ctx, daBlobs[0])
+func (e *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (da.ID, error) {
+	blobInfo, err := e.disperseBlob(ctx, daBlob)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to disperse blob: %v", err)
+		return nil, fmt.Errorf("failed to disperse blob: %v", err)
 	}
 	blobID := ID{
 		BlobIndex:       blobInfo.BlobVerificationProof.BlobIndex,
 		BatchHeaderHash: blobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
 	}
-	return []da.ID{blobID}, []da.Proof{blobInfo.BlobVerificationProof.InclusionProof}, nil
+	return blobID, nil
 }
 
-func (e *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
-	blobID, ok := ids[0].(ID)
+func (e *Client) Get(ctx context.Context, id da.ID) (da.Blob, error) {
+	blobID, ok := id.(ID)
 	if !ok {
 		return nil, fmt.Errorf("invalid ID type")
 	}
@@ -83,18 +83,18 @@ func (e *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve blob: %v", err)
 	}
-	return []da.Blob{resp.Data}, nil
+	return resp.Data, nil
 }
 
-func (e *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
+func (e *Client) Commit(ctx context.Context, daBlob da.Blob) (da.Commitment, error) {
 	return nil, nil
 }
 
-func (e *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
-	return nil, nil
+func (e *Client) Validate(ctx context.Context, id da.ID, proof da.Proof) (bool, error) {
+	return false, nil
 }
 
-func (e *Client) Validate(ctx context.Context, ids []da.ID, proofs []da.Proof) ([]bool, error) {
+func (e *Client) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
 	return nil, nil
 }
 
