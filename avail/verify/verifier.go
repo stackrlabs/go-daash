@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stackrlabs/go-daash/avail"
-	"github.com/stackrlabs/go-daash/avail/verify/bindings/vectorverifier"
+	vectorverifier "github.com/stackrlabs/go-daash/avail/verify/vector/verifier"
 )
 
 const (
