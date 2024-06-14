@@ -52,7 +52,7 @@ func (d *DummyDA) MaxBlobSize(ctx context.Context) (uint64, error) {
 	return d.maxBlobSize, nil
 }
 
-// Get returns Blobs for given IDs.
+// Get returns Blob for given ID.
 func (d *DummyDA) Get(ctx context.Context, id da.ID) (da.Blob, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

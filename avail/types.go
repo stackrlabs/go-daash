@@ -8,9 +8,7 @@ type ID struct {
 
 type Commitment [32]byte
 
-type Proof = DataProofRPCResponse
-
-type DataProofRPCResponse struct {
+type Proof struct {
 	ID      int64  `json:"id"`
 	Jsonrpc string `json:"jsonrpc"`
 	Result  struct {

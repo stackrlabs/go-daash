@@ -32,13 +32,13 @@ type Client interface {
 }
 
 // Blob is the data submitted/received from DA interface.
-type Blob = []byte
+type Blob []byte
 
 // ID should hold data required by the implementation to find blob in Data Availability layer.
-type ID = any
+type ID any
 
 // Commitment should contain cryptographic commitment to Blob value.
-type Commitment = any
+type Commitment any
 
 // Proof should contain a proof of inclusion (publication) of Blob in Data Availability layer.
-type Proof = any
+type Proof any

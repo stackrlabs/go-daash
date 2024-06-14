@@ -62,7 +62,7 @@ func (d *Verifier) IsDataAvailable(id avail.ID) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to get data proof: %w", err)
 	}
-	dataProofRPC, ok := dataProof.(avail.DataProofRPCResponse)
+	dataProofRPC, ok := dataProof.(avail.Proof)
 	if !ok {
 		return false, fmt.Errorf("failed to assert type: %w", err)
 	}
@@ -93,7 +93,7 @@ func (d *Verifier) IsDataIncluded(id avail.ID) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to get data proof: %w", err)
 	}
-	dataProofRPC, ok := dataProof.(avail.DataProofRPCResponse)
+	dataProofRPC, ok := dataProof.(avail.Proof)
 	if !ok {
 		return false, fmt.Errorf("failed to assert type: %w", err)
 	}
@@ -112,7 +112,7 @@ func (d *Verifier) IsDataIncluded(id avail.ID) (bool, error) {
 	return success, nil
 }
 
-func (d *Verifier) GetAggregatedProof(dataProof avail.DataProofRPCResponse, blockHeight uint64) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
+func (d *Verifier) GetAggregatedProof(dataProof avail.Proof, blockHeight uint64) (*vectorverifier.IAvailBridgeMerkleProofInput, error) {
 	chainID, err := d.ethClient.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("cannot get chain id:%w", err)

@@ -159,7 +159,7 @@ out:
 	}
 
 	var extIndex int
-	// Right now, we look trhough all extrinsics in the block to find our submitted extrinsic's index
+	// Right now, we look through all extrinsics in the block to find our submitted extrinsic's index
 	// This works for now but we should find a better way to do this (TODO)
 	for idx, e := range block.Block.Extrinsics {
 		// Look for our submitted extrinsic in the block
@@ -202,7 +202,7 @@ func (c *Client) Get(ctx context.Context, id da.ID) (da.Blob, error) {
 	}
 	blobData := ext.Method.Args[2:]
 	log.Printf("📥 received data:%+v", blobData)
-	return blobData, nil
+	return []byte(blobData), nil
 }
 
 // Commit creates a Commitment for a given Blob.
@@ -221,7 +221,7 @@ func (a *Client) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid ID")
 	}
-	var dataProofResp DataProofRPCResponse
+	var dataProofResp Proof
 	blockHash, err := a.API.RPC.Chain.GetBlockHash(uint64(availID.Height))
 	if err != nil {
 		return dataProofResp, fmt.Errorf("cannot get block hash:%w", err)

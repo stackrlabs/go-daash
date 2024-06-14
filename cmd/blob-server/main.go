@@ -62,7 +62,7 @@ func main() {
 		[]daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen},
 		"./avail-config.json",
 		authToken,
-		"http://localhost:26658",
+		availLightClientRpcUrl,
 		celestiaRpcUrl,
 	)
 	if err != nil {

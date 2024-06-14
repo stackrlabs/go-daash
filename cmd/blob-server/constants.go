@@ -2,8 +2,9 @@ package main
 
 // Constants
 const (
-	EigenDaRpcUrl  = "disperser-goerli.eigenda.xyz:443"
-	celestiaRpcUrl = "https://celestia-mocha-rpc.publicnode.com:443"
+	EigenDaRpcUrl          = "disperser-goerli.eigenda.xyz:443"
+	celestiaRpcUrl         = "https://celestia-mocha-rpc.publicnode.com:443"
+	availLightClientRpcUrl = "http://localhost:26658"
 )
 
 var chainMetadata = map[string]map[string]string{
