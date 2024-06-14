@@ -14,6 +14,7 @@ import (
 	"github.com/stackrlabs/go-daash"
 	"github.com/stackrlabs/go-daash/avail"
 	availVerify "github.com/stackrlabs/go-daash/avail/verify"
+	"github.com/stackrlabs/go-daash/celestia"
 	celestiaVerify "github.com/stackrlabs/go-daash/celestia/verify"
 	"github.com/stackrlabs/go-daash/da"
 )
@@ -56,7 +57,14 @@ func main() {
 
 	server := NewBlobServer()
 	// Initialise all DA clients
-	_, err = server.Daasher.InitClients(ctx, []daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen}, "./avail-config.json", authToken, "http://localhost:26658")
+	_, err = server.Daasher.InitClients(
+		ctx,
+		[]daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen},
+		"./avail-config.json",
+		authToken,
+		availLightClientRpcUrl,
+		celestiaRpcUrl,
+	)
 	if err != nil {
 		fmt.Printf("failed to build DA clients: %v", err)
 		return
@@ -123,23 +131,21 @@ func main() {
 	router.Run()
 }
 
-func postToDA(c context.Context, data []byte, DAClient da.Client) ([]da.ID, []da.Proof, error) {
-	daProofs := make([]da.Proof, 1)
-	daIDs := make([]da.ID, 1)
+func postToDA(c context.Context, data []byte, DAClient da.Client) (da.ID, error) {
+	var id da.ID
 	err := backoff.Retry(func() error {
-		ids, proofs, err := DAClient.Submit(c, [][]byte{data}, -1)
+		daID, err := DAClient.Submit(c, data, -1)
 		if err != nil {
 			fmt.Println("post data: ", err)
 			return fmt.Errorf("post data: %w", err)
 		}
-		daProofs = proofs
-		daIDs = ids
+		id = daID
 		return nil
 	}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3))
 	if err != nil {
-		return nil, nil, fmt.Errorf("retry: %w", err)
+		return nil, fmt.Errorf("retry: %w", err)
 	}
-	return daIDs, daProofs, nil
+	return id, nil
 }
 
 func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.ClientBuilder) {
@@ -165,7 +171,7 @@ func verifyDA(c *gin.Context, layer daash.DALayer, daasher *daash.ClientBuilder)
 			})
 			return
 		}
-		success, err = verifier.VerifyDataAvailable(txHash)
+		success, err = verifier.VerifyDataAvailable(celestia.ID{TxHash: txHash})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("failed to verify data: %v", err),

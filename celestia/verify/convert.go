@@ -3,7 +3,7 @@ package verify
 import (
 	"math/big"
 
-	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
+	bv "github.com/stackrlabs/go-daash/celestia/verify/blobstream/verifier"
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/libs/bytes"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"

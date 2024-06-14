@@ -1,18 +1,16 @@
 package verify
 
 import (
-	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"errors"
 
 	"github.com/celestiaorg/celestia-app/pkg/shares"
-	"github.com/celestiaorg/celestia-app/pkg/square"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
+	"github.com/stackrlabs/go-daash/celestia"
+	bv "github.com/stackrlabs/go-daash/celestia/verify/blobstream/verifier"
 	"github.com/tendermint/tendermint/rpc/client/http"
 )
 
@@ -40,14 +38,9 @@ func NewVerifier(ethEndpoint string, tRPCEndpoint string, verifierContract strin
 	}, nil
 }
 
-func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
-	shareRange, err := d.GetSharePointer(txHash)
-	if err != nil {
-		return false, fmt.Errorf("failed to get share range: %w", err)
-	}
-	fmt.Println("Successfully got share range", shareRange)
-
-	proof, root, err := GetShareProof(d.ethClient, d.tRPCClient, &shareRange, d.blobstreamXContract)
+func (d *Verifier) VerifyDataAvailable(id celestia.ID) (bool, error) {
+	sp := id.SharePointer
+	proof, root, err := d.GetShareProof(sp)
 	if err != nil {
 		return false, fmt.Errorf("failed to get share proof: %w", err)
 	}
@@ -73,9 +66,9 @@ func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
 		nil,
 		d.blobstreamXContract,
 		bv.SpanSequence{
-			Height: big.NewInt(shareRange.Height),
-			Index:  big.NewInt(shareRange.Start),
-			Length: big.NewInt(shareRange.End - shareRange.Start),
+			Height: big.NewInt(sp.Height),
+			Index:  big.NewInt(sp.Start),
+			Length: big.NewInt(sp.End - sp.Start),
 		},
 		proof.RowRoots,
 		proof.RowProofs,
@@ -90,31 +83,4 @@ func (d *Verifier) VerifyDataAvailable(txHash string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func (d *Verifier) GetSharePointer(txHash string) (SharePointer, error) {
-	txHashBytes, err := hex.DecodeString(txHash)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to decode transaction hash: %w", err)
-	}
-	tx, err := d.tRPCClient.Tx(context.Background(), txHashBytes, true)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get transaction: %w", err)
-	}
-
-	blockRes, err := d.tRPCClient.Block(context.Background(), &tx.Height)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get block: %w", err)
-	}
-
-	shareRange, err := square.BlobShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), 0, blockRes.Block.Header.Version.App)
-	// shareRange, err := square.TxShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), blockRes.Block.Header.Version.App)
-	if err != nil {
-		return SharePointer{}, fmt.Errorf("failed to get share range: %w", err)
-	}
-	return SharePointer{
-		Height: tx.Height,
-		Start:  int64(shareRange.Start),
-		End:    int64(shareRange.End),
-	}, nil
 }

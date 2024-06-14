@@ -29,21 +29,20 @@ func generateJobID() string {
 
 func run(ctx context.Context, b *BlobServer, job Job) {
 	var jobStatus map[string]any
-	ids, proofs, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
+	id, err := postToDA(ctx, job.Data, b.Daasher.Clients[job.Layer])
 	if err != nil {
 		jobStatus = gin.H{
 			"status": "failed",
 			"error":  err,
 		}
 	} else {
-		successLink, err := daash.GetExplorerLink(b.Daasher.Clients[job.Layer], ids)
+		successLink, err := daash.GetExplorerLink(b.Daasher.Clients[job.Layer], id)
 		if err != nil {
 			log.Fatalf("cannot get explorer link: %v", err)
 		}
 		jobStatus = gin.H{
 			"status": "Blob daashed and posted to " + string(job.Layer) + " 🏃",
-			"ids":    ids,
-			"proofs": proofs,
+			"id":     id,
 			"link":   successLink,
 		}
 	}

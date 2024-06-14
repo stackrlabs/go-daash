@@ -52,82 +52,66 @@ func (d *DummyDA) MaxBlobSize(ctx context.Context) (uint64, error) {
 	return d.maxBlobSize, nil
 }
 
-// Get returns Blobs for given IDs.
-func (d *DummyDA) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
+// Get returns Blob for given ID.
+func (d *DummyDA) Get(ctx context.Context, id da.ID) (da.Blob, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	blobs := make([]da.Blob, len(ids))
-	for i, id := range ids {
-		id, ok := id.(ID)
-		if !ok {
-			return nil, errors.New("invalid ID")
-		}
-		if len(id) < 8 {
-			return nil, errors.New("invalid ID")
-		}
-		height := binary.LittleEndian.Uint64(id)
-		found := false
-		for j := 0; !found && j < len(d.data[height]); j++ {
-			if bytes.Equal(d.data[height][j].key, id) {
-				blobs[i] = d.data[height][j].value
-				found = true
-			}
-		}
-		if !found {
-			return nil, errors.New("no blob for given ID")
+	var blob da.Blob
+	mockID, ok := id.(ID)
+	if !ok {
+		return nil, errors.New("invalid ID")
+	}
+	if len(mockID) < 8 {
+		return nil, errors.New("invalid ID")
+	}
+	height := binary.LittleEndian.Uint64(mockID)
+	found := false
+	for j := 0; !found && j < len(d.data[height]); j++ {
+		if bytes.Equal(d.data[height][j].key, mockID) {
+			blob = d.data[height][j].value
+			found = true
 		}
 	}
-	return blobs, nil
-}
-
-// GetIDs returns IDs of Blobs at given DA height.
-func (d *DummyDA) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	kvps := d.data[height]
-	ids := make([]da.ID, len(kvps))
-	for i, kv := range kvps {
-		ids[i] = kv.key
+	if !found {
+		return nil, errors.New("no blob for given ID")
 	}
-	return ids, nil
+	return blob, nil
 }
 
 // Commit returns cryptographic Commitments for given blobs.
-func (d *DummyDA) Commit(ctx context.Context, blobs []da.Blob) ([]da.Commitment, error) {
-	commits := make([]da.Commitment, len(blobs))
-	for i, blob := range blobs {
-		commits[i] = d.getHash(blob)
-	}
-	return commits, nil
+func (d *DummyDA) Commit(ctx context.Context, blob da.Blob) (da.Commitment, error) {
+	return d.getHash(blob), nil
 }
 
 // Submit stores blobs in DA layer.
-func (d *DummyDA) Submit(ctx context.Context, blobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
+func (d *DummyDA) Submit(ctx context.Context, blob da.Blob, gasPrice float64) (da.ID, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	ids := make([]da.ID, len(blobs))
-	proofs := make([]da.Proof, len(blobs))
 	d.height += 1
-	for i, blob := range blobs {
-		ids[i] = append(d.nextID(), d.getHash(blob)...)
-		proofs[i] = d.getProof(ids[i].(ID), blob)
+	id := append(d.nextID(), d.getHash(blob)...)
+	d.data[d.height] = append(d.data[d.height], kvp{id, blob})
 
-		d.data[d.height] = append(d.data[d.height], kvp{ids[i].(ID), blob})
+	return id, nil
+}
+
+// GetProof returns inclusion Proofs for all Blobs located in DA at given height.
+func (d *DummyDA) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
+	blob, err := d.Get(ctx, id)
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if err != nil {
+		return nil, err
 	}
-
-	return ids, proofs, nil
+	proof := d.getProof(id.(ID), blob)
+	return proof, nil
 }
 
 // Validate checks the Proofs for given IDs.
-func (d *DummyDA) Validate(ctx context.Context, ids []da.ID, proofs []da.Proof) ([]bool, error) {
-	if len(ids) != len(proofs) {
-		return nil, errors.New("number of IDs doesn't equal to number of proofs")
-	}
-	results := make([]bool, len(ids))
-	for i := 0; i < len(ids); i++ {
-		results[i] = ed25519.Verify(d.pubKey, ids[i].(ID)[8:], proofs[i])
-	}
-	return results, nil
+func (d *DummyDA) Validate(ctx context.Context, id da.ID, proof da.Proof) (bool, error) {
+	result := ed25519.Verify(d.pubKey, id.(ID)[8:], proof.([]byte))
+
+	return result, nil
 }
 
 func (d *DummyDA) nextID() []byte {

@@ -7,30 +7,31 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"strings"
 
 	"github.com/celestiaorg/celestia-app/pkg/appconsts"
+	"github.com/celestiaorg/celestia-app/pkg/square"
 	"github.com/celestiaorg/celestia-app/x/blob/types"
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
-	"github.com/celestiaorg/nmt"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	auth "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/tendermint/tendermint/rpc/client/http"
 
 	"github.com/stackrlabs/go-daash/da"
 )
 
 // Client to interact with Celestia DA
 type Client struct {
-	client    *rpc.Client
-	Namespace share.Namespace
-	gasPrice  float64
-	ctx       context.Context
+	lightClient *rpc.Client
+	nodeClient  *http.HTTP
+	Namespace   share.Namespace
+	gasPrice    float64
+	ctx         context.Context
 }
 
 // Returns an intialised Celestia DA client
-func NewClient(ctx context.Context, lightClientRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*Client, error) {
+func NewClient(ctx context.Context, lightClientRPCUrl string, nodeRPCUrl string, authToken string, hexNamespace string, gasPrice float64) (*Client, error) {
 	nsBytes := make([]byte, 10)
 	_, err := hex.Decode(nsBytes, []byte(hexNamespace))
 	if err != nil {
@@ -46,11 +47,16 @@ func NewClient(ctx context.Context, lightClientRPCUrl string, authToken string, 
 		fmt.Printf("failed to create rpc client: %v", err)
 		return nil, err
 	}
+	nodeClient, err := http.New(nodeRPCUrl, "/websocket")
+	if err != nil {
+		return nil, err
+	}
 	return &Client{
-		client:    client,
-		Namespace: namespace,
-		gasPrice:  gasPrice,
-		ctx:       ctx,
+		lightClient: client,
+		nodeClient:  nodeClient,
+		Namespace:   namespace,
+		gasPrice:    gasPrice,
+		ctx:         ctx,
 	}, nil
 }
 
@@ -61,50 +67,37 @@ func (c *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 }
 
 // Get returns Blob for each given ID, or an error.
-func (c *Client) Get(ctx context.Context, ids []da.ID) ([]da.Blob, error) {
-	var blobs []da.Blob
-	for _, id := range ids {
-		id, ok := id.(ID)
-		if !ok {
-			return nil, errors.New("invalid ID")
-		}
-		blob, err := c.client.Blob.Get(ctx, id.Height, c.Namespace, id.Commitment)
-		if err != nil {
-			return nil, err
-		}
-		blobs = append(blobs, blob.Data)
+func (c *Client) Get(ctx context.Context, id da.ID) (da.Blob, error) {
+	celestiaID, ok := id.(ID)
+	if !ok {
+		return nil, errors.New("invalid ID")
 	}
-	return blobs, nil
-}
-
-// GetIDs returns IDs of all Blobs located in DA at given height.
-func (c *Client) GetIDs(ctx context.Context, height uint64) ([]da.ID, error) {
-	var ids []da.ID
-	blobs, err := c.client.Blob.GetAll(ctx, height, []share.Namespace{c.Namespace})
+	blob, err := c.lightClient.Blob.Get(ctx, celestiaID.Height, c.Namespace, celestiaID.ShareCommitment)
 	if err != nil {
-		if strings.Contains(err.Error(), blob.ErrBlobNotFound.Error()) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	for _, b := range blobs {
-		// TODO: get txHash
-		ids = append(ids, ID{Height: height, Commitment: b.Commitment, TxHash: make([]byte, 32)})
-	}
-	return ids, nil
+
+	return blob.Data, nil
 }
 
 // Commit creates a Commitment for each given Blob.
-func (c *Client) Commit(ctx context.Context, daBlobs []da.Blob) ([]da.Commitment, error) {
-	_, commitments, err := c.blobsAndCommitments(daBlobs)
-	return commitments, err
+func (c *Client) Commit(ctx context.Context, daBlob da.Blob) (da.Commitment, error) {
+	blob, err := blob.NewBlobV0(c.Namespace, daBlob)
+	if err != nil {
+		return nil, err
+	}
+	commitment, err := types.CreateCommitment(&blob.Blob)
+	if err != nil {
+		return nil, err
+	}
+	return commitment, err
 }
 
 // Submit submits the Blobs to Data Availability layer.
-func (c *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64) ([]da.ID, []da.Proof, error) {
-	blobs, commitments, err := c.blobsAndCommitments(daBlobs)
+func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (da.ID, error) {
+	b, err := blob.NewBlobV0(c.Namespace, daBlob)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	options := blob.DefaultSubmitOptions()
 	// if gas price was configured globally use that as the default
@@ -112,88 +105,91 @@ func (c *Client) Submit(ctx context.Context, daBlobs []da.Blob, gasPrice float64
 		gasPrice = c.gasPrice
 	}
 	if gasPrice >= 0 {
-		blobSizes := make([]uint32, len(blobs))
-		for i, blob := range blobs {
-			blobSizes[i] = uint32(len(blob.Data))
-		}
-		options.GasLimit = types.EstimateGas(blobSizes, appconsts.DefaultGasPerBlobByte, auth.DefaultTxSizeCostPerByte)
+		options.GasLimit = types.EstimateGas([]uint32{uint32(len(b.Data))}, appconsts.DefaultGasPerBlobByte, auth.DefaultTxSizeCostPerByte)
 		options.Fee = sdktypes.NewInt(int64(math.Ceil(gasPrice * float64(options.GasLimit)))).Int64()
 	}
-	txResp, err := c.client.State.SubmitPayForBlob(ctx, sdktypes.NewInt(int64(options.Fee)), options.GasLimit, blobs)
+	txResp, err := c.lightClient.State.SubmitPayForBlob(ctx, sdktypes.NewInt(int64(options.Fee)), options.GasLimit, []*blob.Blob{b})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	log.Println("successfully submitted blobs", "height", txResp.Height, "gas", options.GasLimit, "fee", options.Fee)
-	ids := make([]da.ID, len(daBlobs))
-	proofs := make([]da.Proof, len(daBlobs))
-	for i, commitment := range commitments {
-		txHashBytes, err := hex.DecodeString(txResp.TxHash)
-		if err != nil {
-			return nil, nil, err
-		}
-		ids[i] = ID{Height: uint64(txResp.Height), Commitment: commitment, TxHash: txHashBytes}
-		proof, err := c.client.Blob.GetProof(ctx, uint64(txResp.Height), c.Namespace, commitment)
-		if err != nil {
-			return nil, nil, err
-		}
-		// TODO(tzdybal): does always len(*proof) == 1?
-		proofs[i], err = (*proof)[0].MarshalJSON()
-		if err != nil {
-			return nil, nil, err
-		}
+
+	commitment, err := c.Commit(ctx, daBlob)
+	if err != nil {
+		return nil, err
 	}
-	return ids, proofs, nil
+	shareCommitment, ok := commitment.(blob.Commitment)
+	if !ok {
+		return nil, errors.New("invalid commitment")
+	}
+	sp, err := c.getSharePointer(ctx, txResp.TxHash)
+	if err != nil {
+		return nil, err
+	}
+	id := ID{
+		Height:          uint64(txResp.Height),
+		ShareCommitment: shareCommitment,
+		TxHash:          txResp.TxHash,
+		SharePointer:    sp,
+	}
+
+	return id, nil
 }
 
-// blobsAndCommitments converts []da.Blob to []*blob.Blob and generates corresponding []da.Commitment
-func (c *Client) blobsAndCommitments(daBlobs []da.Blob) ([]*blob.Blob, []da.Commitment, error) {
-	var blobs []*blob.Blob
-	var commitments []da.Commitment
-	for _, daBlob := range daBlobs {
-		b, err := blob.NewBlobV0(c.Namespace, daBlob)
-		if err != nil {
-			return nil, nil, err
-		}
-		blobs = append(blobs, b)
-
-		commitment, err := types.CreateCommitment(&b.Blob)
-		if err != nil {
-			return nil, nil, err
-		}
-		commitments = append(commitments, commitment)
+func (c *Client) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
+	celestiaID, ok := id.(ID)
+	if !ok {
+		return nil, errors.New("invalid ID")
 	}
-	return blobs, commitments, nil
+	proof, err := c.lightClient.Blob.GetProof(ctx, celestiaID.Height, c.Namespace, celestiaID.ShareCommitment)
+	if err != nil {
+		return nil, err
+	}
+	return proof, nil
 }
 
 // Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-func (c *Client) Validate(ctx context.Context, ids []da.ID, daProofs []da.Proof) ([]bool, error) {
-	var included []bool
-	var proofs []*blob.Proof
-	for _, daProof := range daProofs {
-		nmtProof := &nmt.Proof{}
-		if err := nmtProof.UnmarshalJSON(daProof); err != nil {
-			return nil, err
-		}
-		proof := &blob.Proof{nmtProof}
-		proofs = append(proofs, proof)
+func (c *Client) Validate(ctx context.Context, id da.ID, daProof da.Proof) (bool, error) {
+	celestiaID, ok := id.(ID)
+	if !ok {
+		return false, errors.New("invalid ID")
 	}
-	for i, id := range ids {
-		id, ok := id.(ID)
-		if !ok {
-			return nil, errors.New("invalid ID")
-		}
-		// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
-		//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
-		//    there is no way of gently handling errors here, but returned value is fine for us
-		isIncluded, _ := c.client.Blob.Included(ctx, id.Height, c.Namespace, proofs[i], id.Commitment)
-		included = append(included, isIncluded)
+	proof, ok := daProof.(Proof)
+	if !ok {
+		return false, errors.New("invalid proof")
 	}
-	return included, nil
+	// TODO(tzdybal): for some reason, if proof doesn't match commitment, API returns (false, "blob: invalid proof")
+	//    but analysis of the code in celestia-node implies this should never happen - maybe it's caused by openrpc?
+	//    there is no way of gently handling errors here, but returned value is fine for us
+	isIncluded, _ := c.lightClient.Blob.Included(ctx, celestiaID.Height, c.Namespace, &proof, celestiaID.ShareCommitment)
+	return isIncluded, nil
 }
 
-type ID struct {
-	Height     uint64
-	Commitment []byte
-	TxHash     []byte
+// getSharePointer returns the share pointer for the given transaction hash.
+func (c *Client) getSharePointer(ctx context.Context, txHash string) (SharePointer, error) {
+	txHashBytes, err := hex.DecodeString(txHash)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to decode transaction hash: %w", err)
+	}
+	tx, err := c.nodeClient.Tx(ctx, txHashBytes, true)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	blockRes, err := c.nodeClient.Block(ctx, &tx.Height)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	shareRange, err := square.BlobShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), 0, blockRes.Block.Header.Version.App)
+	// shareRange, err := square.TxShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), blockRes.Block.Header.Version.App)
+	if err != nil {
+		return SharePointer{}, fmt.Errorf("failed to get share range: %w", err)
+	}
+	return SharePointer{
+		Height: tx.Height,
+		Start:  int64(shareRange.Start),
+		End:    int64(shareRange.End),
+	}, nil
 }

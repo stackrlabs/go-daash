@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamx"
+	"github.com/stackrlabs/go-daash/celestia/verify/blobstream/x"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -21,10 +21,10 @@ const maxFilterRange = uint64(10_000)
 //
 // Please note this method will make atleast blocks/maxFilterRange calls to the
 // Ethereum node
-func GetDataCommitment(eth *ethclient.Client, height int64, blocks uint64, blobstreamxContract common.Address) (*blobstreamx.BlobstreamXDataCommitmentStored, error) {
+func GetDataCommitment(eth *ethclient.Client, height int64, blocks uint64, blobstreamxContract common.Address) (*x.BlobstreamXDataCommitmentStored, error) {
 	ctx := context.Background()
 
-	contract, err := blobstreamx.NewBlobstreamX(blobstreamxContract, eth)
+	contract, err := x.NewBlobstreamX(blobstreamxContract, eth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate contract: %w", err)
 	}
@@ -61,7 +61,7 @@ func GetDataCommitment(eth *ethclient.Client, height int64, blocks uint64, blobs
 	return nil, fmt.Errorf("no matching data commitment found")
 }
 
-func findMatchingDataCommitment(contract *blobstreamx.BlobstreamX, start uint64, end uint64, height int64) (*blobstreamx.BlobstreamXDataCommitmentStored, error) {
+func findMatchingDataCommitment(contract *x.BlobstreamX, start uint64, end uint64, height int64) (*x.BlobstreamXDataCommitmentStored, error) {
 	// fmt.Printf("Scanning blocks %d to %d\n", start, end)
 
 	// Filter events

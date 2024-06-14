@@ -12,33 +12,33 @@ type Client interface {
 	//
 	// Error should be returned if ID is not formatted properly, there is no Blob for given ID or any other client-level
 	// error occurred (dropped connection, timeout, etc).
-	Get(ctx context.Context, ids []ID) ([]Blob, error)
+	Get(ctx context.Context, id ID) (Blob, error)
 
-	// GetIDs returns IDs of all Blobs located in DA at given height.
-	GetIDs(ctx context.Context, height uint64) ([]ID, error)
+	// GetProof returns the proof of inclusion for the given ID.
+	GetProof(ctx context.Context, id ID) (Proof, error)
 
 	// Commit creates a Commitment for each given Blob.
-	Commit(ctx context.Context, blobs []Blob) ([]Commitment, error)
+	Commit(ctx context.Context, blob Blob) (Commitment, error)
 
 	// Submit submits the Blobs to Data Availability layer.
 	//
 	// This method is synchronous. Upon successful submission to Data Availability layer, it returns ID identifying blob
 	// in DA and Proof of inclusion.
 	// If options is nil, default options are used.
-	Submit(ctx context.Context, blobs []Blob, gasPrice float64) ([]ID, []Proof, error)
+	Submit(ctx context.Context, blob Blob, gasPrice float64) (ID, error)
 
 	// Validate validates Commitments against the corresponding Proofs. This should be possible without retrieving the Blobs.
-	Validate(ctx context.Context, ids []ID, proofs []Proof) ([]bool, error)
+	Validate(ctx context.Context, id ID, proof Proof) (bool, error)
 }
 
 // Blob is the data submitted/received from DA interface.
-type Blob = []byte
+type Blob []byte
 
-// ID should holds data required by the implementation to find blob in Data Availability layer.
-type ID = any
+// ID should hold data required by the implementation to find blob in Data Availability layer.
+type ID any
 
-// Commitment should contain serialized cryptographic commitment to Blob value.
-type Commitment = []byte
+// Commitment should contain cryptographic commitment to Blob value.
+type Commitment any
 
 // Proof should contain a proof of inclusion (publication) of Blob in Data Availability layer.
-type Proof = []byte
+type Proof any

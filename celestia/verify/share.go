@@ -4,44 +4,33 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
-	bv "github.com/stackrlabs/go-daash/celestia/verify/bindings/blobstreamverifier"
-	"github.com/tendermint/tendermint/rpc/client/http"
+	"github.com/stackrlabs/go-daash/celestia"
+	bv "github.com/stackrlabs/go-daash/celestia/verify/blobstream/verifier"
 )
 
-type SharePointer struct {
-	Height int64
-	Start  int64
-	End    int64
-}
-
-// GetShareProof returns the share proof for the given share pointer.
-// Ready to be used with the DAVerifier library.
-// RE: https://docs.celestia.org/developers/blobstream-proof-queries#example-rollup-that-uses-the-daverifier
-func GetShareProof(eth *ethclient.Client, trpc *http.HTTP, sp *SharePointer, blobstreamContract common.Address) (*bv.SharesProof, [32]byte, error) {
+func (v Verifier) GetShareProof(sp celestia.SharePointer) (*bv.SharesProof, [32]byte, error) {
 	ctx := context.Background()
 
 	// 1. Get the data commitment
-	dataCommitment, err := GetDataCommitment(eth, sp.Height, 10_000_000, blobstreamContract)
+	dataCommitment, err := GetDataCommitment(v.ethClient, sp.Height, 10_000_000, v.blobstreamXContract)
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to get data commitment: %w", err)
 	}
 
 	// 2. Get the block
-	blockRes, err := trpc.Block(ctx, &sp.Height)
+	blockRes, err := v.tRPCClient.Block(ctx, &sp.Height)
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to get block: %w", err)
 	}
 
 	// 3. get data root inclusion commitment
-	dcProof, err := trpc.DataRootInclusionProof(ctx, uint64(sp.Height), dataCommitment.StartBlock, dataCommitment.EndBlock)
+	dcProof, err := v.tRPCClient.DataRootInclusionProof(ctx, uint64(sp.Height), dataCommitment.StartBlock, dataCommitment.EndBlock)
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to get data root inclusion proof: %w", err)
 	}
 
 	// 4. get share proof
-	shareProof, err := trpc.ProveShares(ctx, (uint64(sp.Height)), uint64(sp.Start), uint64(sp.End))
+	shareProof, err := v.tRPCClient.ProveShares(ctx, (uint64(sp.Height)), uint64(sp.Start), uint64(sp.End))
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to get share proof: %w", err)
 	}
