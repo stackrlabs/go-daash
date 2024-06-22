@@ -6,12 +6,12 @@ type ID struct {
 	Height uint64
 	SharePointer
 	TxHash          string
-	ShareCommitment blob.Commitment
+	ShareCommitment Commitment
 }
 
 type Proof = blob.Proof
 
-type Commitment = blob.Commitment
+type Commitment = []byte
 
 type SharePointer struct {
 	Height int64

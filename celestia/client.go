@@ -119,7 +119,7 @@ func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (
 	if err != nil {
 		return nil, err
 	}
-	shareCommitment, ok := commitment.(blob.Commitment)
+	shareCommitment, ok := commitment.(Commitment)
 	if !ok {
 		return nil, errors.New("invalid commitment")
 	}
