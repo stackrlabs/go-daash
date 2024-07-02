@@ -14,7 +14,7 @@ replace (
 
 require (
 	github.com/celestiaorg/celestia-app v1.12.0
-	github.com/celestiaorg/celestia-node v0.14.0
+	github.com/celestiaorg/celestia-node v0.13.7
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
@@ -75,6 +75,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/cosmos-proto v1.0.0-alpha8 // indirect
+	github.com/cosmos/cosmos-sdk/api v0.1.0 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/cosmos/gogoproto v1.4.11 // indirect
 	github.com/cosmos/gorocksdb v1.2.0 // indirect

@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   celestia-light-client-init:
-    image: ghcr.io/celestiaorg/celestia-node:v0.12.4
+    image: ghcr.io/celestiaorg/celestia-node:v0.14.0
     user: "10001:10001"
     environment:
       NODE_TYPE: ${NODE_TYPE} # Ensure these environment variables are set in your shell or a .env file
@@ -13,7 +13,7 @@ services:
     restart: on-failure
 
   celestia-light-client:
-    image: ghcr.io/celestiaorg/celestia-node:v0.12.4
+    image: ghcr.io/celestiaorg/celestia-node:v0.14.0
     user: "10001:10001"
     networks: [go-daash]
     environment:
