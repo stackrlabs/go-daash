@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
+	"github.com/Layr-Labs/eigenda/api/clients"
 	"github.com/cenkalti/backoff"
 	"github.com/stackrlabs/go-daash/avail"
 	"github.com/stackrlabs/go-daash/celestia"
@@ -52,6 +52,7 @@ func (d *ClientBuilder) InitClients(
 	celestiaAuthToken string,
 	celestiaLightClientUrl string,
 	celestiaNodeUrl string,
+	eigenConfig clients.EigenDAClientConfig,
 ) (*ClientBuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
@@ -88,7 +89,7 @@ func (d *ClientBuilder) InitClients(
 			d.Clients[Celestia] = celestia
 
 		case Eigen:
-			eigen, err := eigen.NewClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+			eigen, err := eigen.NewClient(eigenConfig)
 			if err != nil {
 				return nil, err
 			}

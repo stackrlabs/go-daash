@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/Layr-Labs/eigenda/api/clients"
 	"github.com/joho/godotenv"
 
 	"github.com/cenkalti/backoff/v4"
@@ -47,23 +48,28 @@ func main() {
 	router := gin.Default()
 	ctx := context.Background()
 
-	envFile, err := godotenv.Read("../../.env") // read from root
+	envFile, err := godotenv.Read(".env")
 	if err != nil {
 		fmt.Println("Error reading .env file")
 
 		return
 	}
 	authToken := envFile["CELESTIA_AUTH_TOKEN"]
+	eigenPrivateKey := envFile["EIGENDA_AUTH_PRIVATE_KEY"]
 
 	server := NewBlobServer()
 	// Initialise all DA clients
 	_, err = server.Daasher.InitClients(
 		ctx,
-		[]daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen},
+		[]daash.DALayer{daash.Eigen},
 		"./avail-config.json",
 		authToken,
 		availLightClientRpcUrl,
 		celestiaRpcUrl,
+		clients.EigenDAClientConfig{
+			RPC:                 EigenDaRpcUrl,
+			SignerPrivateKeyHex: eigenPrivateKey,
+		},
 	)
 	if err != nil {
 		fmt.Printf("failed to build DA clients: %v", err)
