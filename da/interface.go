@@ -23,7 +23,7 @@ type Client interface {
 	// Submit submits the Blobs to Data Availability layer.
 	//
 	// This method is synchronous. Upon successful submission to Data Availability layer, it returns ID identifying blob
-	// in DA and Proof of inclusion.
+	// in DA.
 	// If options is nil, default options are used.
 	Submit(ctx context.Context, blob Blob, gasPrice float64) (ID, error)
 

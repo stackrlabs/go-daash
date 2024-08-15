@@ -61,7 +61,7 @@ func main() {
 	// Initialise all DA clients
 	_, err = server.Daasher.InitClients(
 		ctx,
-		[]daash.DALayer{daash.Eigen},
+		[]daash.DALayer{daash.Avail, daash.Celestia, daash.Eigen},
 		"./avail-config.json",
 		authToken,
 		availLightClientRpcUrl,

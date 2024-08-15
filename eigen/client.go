@@ -35,14 +35,17 @@ func NewClient(config clients.EigenDAClientConfig) (*Client, error) {
 }
 
 func (e *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
-	return 512 * 1024, nil // Currently set at 512KB
+	return 2 * 1024 * 1024, nil // Currently set at 2MB
 }
 
 func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (da.ID, error) {
+	start := time.Now()
 	blobInfo, err := c.PutBlob(ctx, daBlob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to disperse blob: %v", err)
 	}
+	end := time.Now()
+	fmt.Println("Time taken to disperse blob:", end.Sub(start))
 	blobID := ID{
 		BlobIndex:       blobInfo.BlobVerificationProof.BlobIndex,
 		BatchHeaderHash: blobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
@@ -109,8 +112,8 @@ func (c *Client) putBlob(ctx context.Context, rawData []byte, resultChan chan *g
 	}
 
 	customQuorumNumbers := make([]uint8, len(c.internalClient.Config.CustomQuorumIDs))
-	for i, e := range c.internalClient.Config.CustomQuorumIDs {
-		customQuorumNumbers[i] = uint8(e)
+	for i, id := range c.internalClient.Config.CustomQuorumIDs {
+		customQuorumNumbers[i] = uint8(id)
 	}
 	// disperse blob
 	blobStatus, requestID, err := c.internalClient.Client.DisperseBlobAuthenticated(ctx, data, customQuorumNumbers)
