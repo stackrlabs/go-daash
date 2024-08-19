@@ -116,7 +116,7 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 		}
 		return availID
 	case Celestia:
-		id, ok := id.(celestia.ID)
+		celestiaID, ok := id.(celestia.ID)
 		if !ok {
 			return ""
 		}
@@ -125,12 +125,12 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			TxHash      string        `json:"txHash"`
 			Commitment  da.Commitment `json:"commitment"`
 		}{
-			BlockHeight: id.Height,
-			TxHash:      id.TxHash,
-			Commitment:  id.ShareCommitment,
+			BlockHeight: celestiaID.Height,
+			TxHash:      celestiaID.TxHash,
+			Commitment:  celestiaID.ShareCommitment,
 		}
 	case Eigen:
-		id, ok := id.(*eigen.ID)
+		eigenID, ok := id.(eigen.ID)
 		if !ok {
 			return ""
 		}
@@ -139,9 +139,9 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			BlobIndex       uint32
 			RequestID       string
 		}{
-			BatchHeaderHash: id.BlobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
-			BlobIndex:       id.BlobInfo.BlobVerificationProof.BlobIndex,
-			RequestID:       id.RequestID,
+			BatchHeaderHash: eigenID.BlobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
+			BlobIndex:       eigenID.BlobInfo.BlobVerificationProof.BlobIndex,
+			RequestID:       eigenID.RequestID,
 		}
 	default:
 		return ""
@@ -170,11 +170,11 @@ func GetExplorerLink(client da.Client, id da.ID) (string, error) {
 		fmt.Println(extString)
 		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extString), nil
 	case *eigen.Client:
-		id, ok := id.(eigen.ID)
+		eigenID, ok := id.(eigen.ID)
 		if !ok {
 			return "", fmt.Errorf("invalid ID")
 		}
-		return fmt.Sprintf("https://blobs-holesky.eigenda.xyz/blobs/%s", id.RequestID), nil
+		return fmt.Sprintf("https://blobs-holesky.eigenda.xyz/blobs/%s", eigenID.RequestID), nil
 	default:
 		return "", nil
 	}
