@@ -40,25 +40,22 @@ func (e *Client) MaxBlobSize(ctx context.Context) (uint64, error) {
 
 func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (da.ID, error) {
 	start := time.Now()
-	blobInfo, err := c.PutBlob(ctx, daBlob)
+	blobID, err := c.PutBlob(ctx, daBlob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to disperse blob: %v", err)
 	}
 	end := time.Now()
 	fmt.Println("Time taken to disperse blob:", end.Sub(start))
-	blobID := ID{
-		BlobIndex:       blobInfo.BlobVerificationProof.BlobIndex,
-		BatchHeaderHash: blobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
-	}
+
 	return blobID, nil
 }
 
 func (c *Client) Get(ctx context.Context, id da.ID) (da.Blob, error) {
-	blobID, ok := id.(ID)
+	blobID, ok := id.(*ID)
 	if !ok {
 		return nil, fmt.Errorf("invalid ID type")
 	}
-	blob, err := c.internalClient.GetBlob(ctx, blobID.BatchHeaderHash, blobID.BlobIndex)
+	blob, err := c.internalClient.GetBlob(ctx, blobID.BlobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash, blobID.BlobInfo.BlobVerificationProof.BlobIndex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve blob: %v", err)
 	}
@@ -81,24 +78,24 @@ func (e *Client) GetProof(ctx context.Context, id da.ID) (da.Proof, error) {
 // PutBlob encodes and writes a blob to EigenDA, waiting for it to be confirmed
 // before returning. This function is resiliant to transient failures and
 // timeouts.
-func (c *Client) PutBlob(ctx context.Context, data []byte) (*grpcdisperser.BlobInfo, error) {
+func (c *Client) PutBlob(ctx context.Context, data []byte) (ID, error) {
 	resultChan, errorChan := c.PutBlobAsync(ctx, data)
 	select { // no timeout here because we depend on the configured timeout in PutBlobAsync
 	case result := <-resultChan:
 		return result, nil
 	case err := <-errorChan:
-		return nil, err
+		return ID{}, err
 	}
 }
 
-func (c *Client) PutBlobAsync(ctx context.Context, data []byte) (resultChan chan *grpcdisperser.BlobInfo, errChan chan error) {
-	resultChan = make(chan *grpcdisperser.BlobInfo, 1)
+func (c *Client) PutBlobAsync(ctx context.Context, data []byte) (resultChan chan ID, errChan chan error) {
+	resultChan = make(chan ID, 1)
 	errChan = make(chan error, 1)
 	go c.putBlob(ctx, data, resultChan, errChan)
 	return
 }
 
-func (c *Client) putBlob(ctx context.Context, rawData []byte, resultChan chan *grpcdisperser.BlobInfo, errChan chan error) {
+func (c *Client) putBlob(ctx context.Context, rawData []byte, resultChan chan ID, errChan chan error) {
 	// encode blob
 	if c.internalClient.Codec == nil {
 		errChan <- fmt.Errorf("codec cannot be nil")
@@ -161,7 +158,7 @@ func (c *Client) putBlob(ctx context.Context, rawData []byte, resultChan chan *g
 				return
 			case grpcdisperser.BlobStatus_CONFIRMED:
 				fmt.Println("EigenDA blob confirmed, waiting for finalization", "requestID", base64RequestID)
-				resultChan <- statusRes.Info
+				resultChan <- ID{BlobInfo: statusRes.Info, RequestID: string(requestID)}
 			case grpcdisperser.BlobStatus_FINALIZED:
 				batchHeaderHashHex := fmt.Sprintf("0x%s", hex.EncodeToString(statusRes.Info.BlobVerificationProof.BatchMetadata.BatchHeaderHash))
 				fmt.Println("Successfully dispersed blob to EigenDA", "requestID", base64RequestID, "batchHeaderHash", batchHeaderHashHex)

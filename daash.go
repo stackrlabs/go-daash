@@ -129,6 +129,20 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			TxHash:      id.TxHash,
 			Commitment:  id.ShareCommitment,
 		}
+	case Eigen:
+		id, ok := id.(*eigen.ID)
+		if !ok {
+			return ""
+		}
+		return struct {
+			BatchHeaderHash []byte
+			BlobIndex       uint32
+			RequestID       string
+		}{
+			BatchHeaderHash: id.BlobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
+			BlobIndex:       id.BlobInfo.BlobVerificationProof.BlobIndex,
+			RequestID:       id.RequestID,
+		}
 	default:
 		return ""
 	}
@@ -155,6 +169,12 @@ func GetExplorerLink(client da.Client, id da.ID) (string, error) {
 		extString := strings.Trim(string(extBytes), "\"")
 		fmt.Println(extString)
 		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extString), nil
+	case *eigen.Client:
+		id, ok := id.(eigen.ID)
+		if !ok {
+			return "", fmt.Errorf("invalid ID")
+		}
+		return fmt.Sprintf("https://blobs-holesky.eigenda.xyz/blobs/%s", id.RequestID), nil
 	default:
 		return "", nil
 	}
