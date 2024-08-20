@@ -2,7 +2,7 @@ package main
 
 // Constants
 const (
-	EigenDaRpcUrl          = "disperser-goerli.eigenda.xyz:443"
+	EigenDaRpcUrl          = "disperser-holesky.eigenda.xyz:443"
 	celestiaRpcUrl         = "https://celestia-mocha-rpc.publicnode.com:443"
 	availLightClientRpcUrl = "http://localhost:26658"
 )

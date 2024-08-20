@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
+	"github.com/Layr-Labs/eigenda/api/clients"
 	"github.com/cenkalti/backoff"
 	"github.com/stackrlabs/go-daash/avail"
 	"github.com/stackrlabs/go-daash/celestia"
@@ -52,6 +52,7 @@ func (d *ClientBuilder) InitClients(
 	celestiaAuthToken string,
 	celestiaLightClientUrl string,
 	celestiaNodeUrl string,
+	eigenConfig clients.EigenDAClientConfig,
 ) (*ClientBuilder, error) {
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("no da layers provided")
@@ -88,7 +89,7 @@ func (d *ClientBuilder) InitClients(
 			d.Clients[Celestia] = celestia
 
 		case Eigen:
-			eigen, err := eigen.NewClient("disperser-goerli.eigenda.xyz:443", time.Second*90, time.Second*5)
+			eigen, err := eigen.NewClient(eigenConfig)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +116,7 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 		}
 		return availID
 	case Celestia:
-		id, ok := id.(celestia.ID)
+		celestiaID, ok := id.(celestia.ID)
 		if !ok {
 			return ""
 		}
@@ -124,9 +125,23 @@ func GetHumanReadableID(id da.ID, daLayer DALayer) any {
 			TxHash      string        `json:"txHash"`
 			Commitment  da.Commitment `json:"commitment"`
 		}{
-			BlockHeight: id.Height,
-			TxHash:      id.TxHash,
-			Commitment:  id.ShareCommitment,
+			BlockHeight: celestiaID.Height,
+			TxHash:      celestiaID.TxHash,
+			Commitment:  celestiaID.ShareCommitment,
+		}
+	case Eigen:
+		eigenID, ok := id.(eigen.ID)
+		if !ok {
+			return ""
+		}
+		return struct {
+			BatchHeaderHash []byte
+			BlobIndex       uint32
+			RequestID       string
+		}{
+			BatchHeaderHash: eigenID.BlobInfo.BlobVerificationProof.BatchMetadata.BatchHeaderHash,
+			BlobIndex:       eigenID.BlobInfo.BlobVerificationProof.BlobIndex,
+			RequestID:       eigenID.RequestID,
 		}
 	default:
 		return ""
@@ -154,6 +169,12 @@ func GetExplorerLink(client da.Client, id da.ID) (string, error) {
 		extString := strings.Trim(string(extBytes), "\"")
 		fmt.Println(extString)
 		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extString), nil
+	case *eigen.Client:
+		eigenID, ok := id.(eigen.ID)
+		if !ok {
+			return "", fmt.Errorf("invalid ID")
+		}
+		return fmt.Sprintf("https://blobs-holesky.eigenda.xyz/blobs/%s", eigenID.RequestID), nil
 	default:
 		return "", nil
 	}

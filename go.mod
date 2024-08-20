@@ -13,20 +13,50 @@ replace (
 )
 
 require (
+	github.com/Layr-Labs/eigenda v0.7.4
 	github.com/celestiaorg/celestia-app v1.12.0
 	github.com/celestiaorg/celestia-node v0.13.7
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/cosmos/cosmos-sdk v0.46.16
-	github.com/ethereum/go-ethereum v1.13.10
+	github.com/ethereum/go-ethereum v1.14.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/joho/godotenv v1.5.1
 	github.com/tendermint/tendermint v0.34.29
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.24.0
-	google.golang.org/grpc v1.64.0
-	google.golang.org/protobuf v1.34.1
+)
+
+require (
+	github.com/Layr-Labs/eigensdk-go v0.1.7-0.20240507215523-7e4891d5099a // indirect
+	github.com/aws/aws-sdk-go-v2 v1.26.1 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.27.11 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.11 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.5 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/kms v1.31.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.28.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.20.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.6 // indirect
+	github.com/aws/smithy-go v1.20.2 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
+	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
+	github.com/lmittmann/tint v1.0.4 // indirect
+	github.com/pingcap/errors v0.11.4 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466 // indirect
+	github.com/urfave/cli v1.22.14 // indirect
+	github.com/wealdtech/go-merkletree v1.0.1-0.20230205101955-ec7a95ea11ca // indirect
+	github.com/x448/float16 v0.8.4 // indirect
+	google.golang.org/grpc v1.64.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 )
 
 require (
@@ -40,7 +70,7 @@ require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
-	github.com/Jorropo/jsync v1.0.1 // indirect
+	github.com/Jorropo/jsync v1.0.1 // indirect; indirect// indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
@@ -82,7 +112,7 @@ require (
 	github.com/cosmos/iavl v0.19.6 // indirect
 	github.com/cosmos/ibc-go/v6 v6.3.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.13.2 // indirect
-	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
+	github.com/crate-crypto/go-kzg-4844 v1.0.0 // indirect
 	github.com/creachadair/taskgroup v0.3.2 // indirect
 	github.com/cristalhq/jwt v1.2.0 // indirect
 	github.com/cskr/pubsub v1.0.2 // indirect
@@ -103,7 +133,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/dvsekhvalnov/jose2go v1.6.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
-	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
+	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/filecoin-project/dagstore v0.5.6 // indirect
 	github.com/filecoin-project/go-jsonrpc v0.4.0 // indirect
@@ -119,7 +149,7 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.17.0 // indirect
@@ -254,7 +284,6 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/onsi/ginkgo/v2 v2.17.3 // indirect
-	github.com/opencontainers/runc v1.1.5 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
