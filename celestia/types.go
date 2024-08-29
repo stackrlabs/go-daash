@@ -11,7 +11,7 @@ type ID struct {
 
 type Proof = blob.Proof
 
-type Commitment = []byte
+type Commitment = blob.Commitment
 
 type SharePointer struct {
 	Height int64
