@@ -35,12 +35,10 @@ func NewClient(ctx context.Context, lightClientRPCUrl string, nodeRPCUrl string,
 		log.Fatalln("invalid hex value of a namespace:", err)
 		return nil, err
 	}
-	fmt.Println("nsBytes", nsBytes)
 	namespace, err := share.NewBlobNamespaceV0(nsBytes)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("namespace", namespace)
 	client, err := rpc.NewClient(ctx, lightClientRPCUrl, authToken)
 	if err != nil {
 		fmt.Printf("failed to create rpc client: %v", err)
