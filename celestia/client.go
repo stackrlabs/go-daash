@@ -6,16 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 
-	"github.com/celestiaorg/celestia-app/pkg/appconsts"
-	"github.com/celestiaorg/celestia-app/pkg/square"
-	"github.com/celestiaorg/celestia-app/x/blob/types"
+	"github.com/celestiaorg/celestia-app/v2/pkg/appconsts"
 	rpc "github.com/celestiaorg/celestia-node/api/rpc/client"
 	"github.com/celestiaorg/celestia-node/blob"
 	"github.com/celestiaorg/celestia-node/share"
-	sdktypes "github.com/cosmos/cosmos-sdk/types"
-	auth "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/celestiaorg/celestia-node/state"
+	square "github.com/celestiaorg/go-square/v2"
 	"github.com/tendermint/tendermint/rpc/client/http"
 
 	"github.com/stackrlabs/go-daash/da"
@@ -86,11 +83,8 @@ func (c *Client) Commit(ctx context.Context, daBlob da.Blob) (da.Commitment, err
 	if err != nil {
 		return nil, err
 	}
-	commitment, err := types.CreateCommitment(&blob.Blob)
-	if err != nil {
-		return nil, err
-	}
-	return commitment, err
+
+	return blob.Commitment, nil
 }
 
 // Submit submits the Blobs to Data Availability layer.
@@ -99,21 +93,17 @@ func (c *Client) Submit(ctx context.Context, daBlob da.Blob, gasPrice float64) (
 	if err != nil {
 		return nil, err
 	}
-	options := blob.DefaultSubmitOptions()
-	// if gas price was configured globally use that as the default
-	if c.gasPrice >= 0 && gasPrice < 0 {
-		gasPrice = c.gasPrice
-	}
-	if gasPrice >= 0 {
-		options.GasLimit = types.EstimateGas([]uint32{uint32(len(b.Data))}, appconsts.DefaultGasPerBlobByte, auth.DefaultTxSizeCostPerByte)
-		options.Fee = sdktypes.NewInt(int64(math.Ceil(gasPrice * float64(options.GasLimit)))).Int64()
-	}
-	txResp, err := c.lightClient.State.SubmitPayForBlob(ctx, sdktypes.NewInt(int64(options.Fee)), options.GasLimit, []*blob.Blob{b})
+	opts := state.NewTxConfig(state.WithGasPrice(gasPrice))
+	err = b.Namespace().ValidateForBlob()
 	if err != nil {
 		return nil, err
 	}
+	txResp, err := c.lightClient.State.SubmitPayForBlob(ctx, []*state.Blob{b.Blob}, opts)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("failed to submit blobs"))
+	}
 
-	log.Println("successfully submitted blobs", "height", txResp.Height, "gas", options.GasLimit, "fee", options.Fee)
+	log.Println("successfully submitted blobs", "height", txResp.Height, "gas", txResp.GasUsed)
 
 	commitment, err := c.Commit(ctx, daBlob)
 	if err != nil {
@@ -181,8 +171,10 @@ func (c *Client) getSharePointer(ctx context.Context, txHash string) (SharePoint
 	if err != nil {
 		return SharePointer{}, fmt.Errorf("failed to get block: %w", err)
 	}
-
-	shareRange, err := square.BlobShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), 0, blockRes.Block.Header.Version.App)
+	version := blockRes.Block.Header.Version.App
+	maxSquareSize := appconsts.SquareSizeUpperBound(version)
+	subtreeRootThreshold := appconsts.SubtreeRootThreshold(version)
+	shareRange, err := square.BlobShareRange(blockRes.Block.Txs.ToSliceOfBytes(), int(tx.Index), 0, maxSquareSize, subtreeRootThreshold)
 	// shareRange, err := square.TxShareRange(blockRes.Block.Data.Txs.ToSliceOfBytes(), int(tx.Index), blockRes.Block.Header.Version.App)
 	if err != nil {
 		return SharePointer{}, fmt.Errorf("failed to get share range: %w", err)
