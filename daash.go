@@ -167,8 +167,7 @@ func GetExplorerLink(client da.Client, id da.ID) (string, error) {
 		}
 		// Strip string of any leading or following quotes
 		extString := strings.Trim(string(extBytes), "\"")
-		fmt.Println(extString)
-		return fmt.Sprintf("https://goldberg.avail.tools/#/extrinsics/decode/%s", extString), nil
+		return fmt.Sprintf("https://turing.avail.tools/#/extrinsics/decode/%s", extString), nil
 	case *eigen.Client:
 		eigenID, ok := id.(eigen.ID)
 		if !ok {
